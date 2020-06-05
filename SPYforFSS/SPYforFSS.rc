@@ -1,0 +1,173 @@
+// Microsoft Visual C++ generated resource script.
+//
+#include "resource.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "winres.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// 한국어(대한민국) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_KOR)
+LANGUAGE LANG_KOREAN, SUBLANG_DEFAULT
+#pragma code_page(949)
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#include ""winres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_MAINPAGE DIALOGEX 0, 0, 381, 325
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "SPY for FSS"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    LISTBOX         IDC_PIDLIST,7,40,367,278,LBS_SORT | LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
+    EDITTEXT        IDC_SELECTS,7,7,278,28,ES_AUTOHSCROLL
+    PUSHBUTTON      "새로고침",IDC_REFRESH,293,7,24,28,BS_BITMAP
+    PUSHBUTTON      "감시",IDC_WATCH,324,7,50,28
+END
+
+IDD_COLLECTPAGE DIALOGEX 0, 0, 381, 325
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "SPY for FSS"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    LISTBOX         IDC_COLLECTLIST,7,40,367,278,LBS_SORT | LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "시작 / 중지",IDC_STARTSUSPEND,7,7,70,28
+    PUSHBUTTON      "내보내기",IDC_FILEOUT,86,7,70,28
+    PUSHBUTTON      "옵션",IDC_OPTION,167,7,70,28
+END
+
+IDD_OPTIONPAGE DIALOGEX 0, 0, 381, 325
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "SPY for FSS"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    CONTROL         "",IDC_OPTIONTAB,"SysTabControl32",WS_GROUP,7,12,31,279
+    PUSHBUTTON      "시작",IDC_START,209,291,76,27
+    PUSHBUTTON      "취소",IDC_CANCLE,298,291,76,27
+    LISTBOX         IDC_MSGLIST,22,51,135,161,LBS_SORT | LBS_MULTIPLESEL | LBS_HASSTRINGS | LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
+    GROUPBOX        "메시지 그룹",IDC_STATIC,175,35,184,232
+    PUSHBUTTON      "모두 선택",IDC_ALLSELECT,25,228,61,21
+    PUSHBUTTON      "모두 지우기",IDC_ALLDESELECT,93,228,61,21
+    LTEXT           "표시할 메시지",IDC_STATIC,22,35,58,13
+    CONTROL         "Check1",IDC_CHECK1,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,180,49,39,10
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO
+BEGIN
+    IDD_MAINPAGE, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 374
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 318
+        HORZGUIDE, 35
+    END
+
+    IDD_COLLECTPAGE, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 374
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 318
+        HORZGUIDE, 35
+    END
+
+    IDD_OPTIONPAGE, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 374
+        TOPMARGIN, 6
+        BOTTOMMARGIN, 318
+        HORZGUIDE, 35
+        HORZGUIDE, 228
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// AFX_DIALOG_LAYOUT
+//
+
+IDD_MAINPAGE AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
+IDD_COLLECTPAGE AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
+IDD_OPTIONPAGE AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Bitmap
+//
+
+IDB_REFRESH             BITMAP                  "refresh.bmp"
+
+#endif    // 한국어(대한민국) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+
