@@ -27,22 +27,14 @@ BOOL CMainDlg::Show(HINSTANCE _parentInstance)
 
 INT_PTR CALLBACK CMainDlg::RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	//auto pThis = (CMainDlg*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
 	switch (uMsg)
 	{
 	case WM_INITDIALOG:
-		HANDLE_WM_INITDIALOG(hwnd, wParam, lParam, InitDialog);
-		//SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)lParam);
-		//pThis = (CMainDlg*)lParam;
-		//pThis->ownHwnd = hwnd;
-		//HANDLE_WM_INITDIALOG(hwnd, wParam, lParam, pThis->InitDialog);
-		//pThis->InitDialog(hwnd, (HWND)(wParam), lParam);
+		InitDialog(hwnd, (HWND)(wParam), lParam);
 		break;
 
 	case WM_COMMAND:
-		HANDLE_WM_COMMAND(hwnd, wParam, lParam, Command);
-		//HANDLE_WM_COMMAND(hwnd, wParam, lParam, pThis->Command);
-		//pThis->Command(hwnd, (int)(LOWORD(wParam)), (HWND)(lParam), (UINT)HIWORD(wParam));
+		Command(hwnd, (int)(LOWORD(wParam)), (HWND)(lParam), (UINT)HIWORD(wParam));
 		break;
 	}
 
@@ -58,28 +50,37 @@ void CMainDlg::Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
 	case IDOK:
 		EndDialog(hwnd, id);
 		break;
+		
+	case IDC_PIDLIST:
+		if (codeNotify == LBN_DBLCLK)
+		{
+			InsertClickProcess(hwndCtl, hwnd);
+		}
+		break;
+
+	case IDC_REFRESH:
+		RefreshList(hwnd);
+		break;
 
 	case IDC_WATCH:
-		CCollectDlg tmp(counter);
-		counter++;
-		tmp.Show(parentInstance);
+		CCollectDlg collectDlg;
+		collectDlg.Show(parentInstance);
 		break;
 	}
 }
 
 // 다이얼로그 초기화
-
 BOOL CMainDlg::InitDialog(HWND hwnd, HWND hwndFocus, LPARAM lParam)
 {
-
+	RefreshList(hwnd);
 	return TRUE;
 }
 
-BOOL CMainDlg::ShowProcessList(HWND hwnd)
+// 현재 프로세스 리스트 업데이트
+BOOL CMainDlg::RefreshList(HWND hwnd)
 {
 	// Get the list of process identifiers.
 	DWORD processlist[1024] = { 0, }, listByte = 0;
-
 	BOOL sucessFunc = EnumProcesses(processlist, sizeof(processlist), &listByte);
 	if (NULL == sucessFunc)
 	{
@@ -88,42 +89,63 @@ BOOL CMainDlg::ShowProcessList(HWND hwnd)
 
 	DWORD listLen = listByte / sizeof(DWORD);
 	HWND listHwnd = GetDlgItem(hwnd, IDC_PIDLIST);
+	SendMessage(listHwnd, LB_RESETCONTENT, 0, 0); // reset 
 	for (unsigned int i = 0; i < listLen; i++)
 	{
 		if (processlist[i] != 0)
 		{
-			PrintProcessNameAndID(processlist[i], listHwnd);
+			WCHAR szProcessName[MAX_PATH] = { 0, };
+			// Get a handle to the process.
+
+			HANDLE processHandle = OpenProcess(
+				PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
+				FALSE,
+				processlist[i]);
+
+			// Get the process name.
+			if (NULL != processHandle)
+			{
+				DWORD successFunc = GetModuleFileNameEx( // GetModuleBaseNameW : 실행 파일명
+					processHandle,
+					0,
+					szProcessName,
+					sizeof(szProcessName) / sizeof(WCHAR));
+				if (NULL != successFunc)
+				{
+					std::wstring addItem(wcsrchr(szProcessName, L'\\') + 1);
+					addItem += L"(PID: ";
+					addItem += std::to_wstring(processlist[i]);
+					addItem += L")";
+					ListBox_AddString(listHwnd, addItem.c_str());
+				}
+			}
+			CloseHandle(processHandle);
 		}
 	}
 	return TRUE;
 }
 
-void CMainDlg::PrintProcessNameAndID(DWORD processID, HWND hwnd)
+void CMainDlg::InsertClickProcess(HWND hwndCtl, HWND hwnd)
 {
-	WCHAR szProcessName[MAX_PATH] = { 0, };
-	// Get a handle to the process.
+	int count = SendMessageW(hwndCtl, LB_GETCURSEL, 0, 0);
+	WCHAR inputPID[MAX_PATH] = { 0, };
+	SendMessageW(hwndCtl, LB_GETTEXT, (WPARAM)(count), (LPARAM)inputPID);
 
-	HANDLE processHandle = OpenProcess(
-		PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
-		FALSE,
-		processID);
+	WCHAR currentContent[1000] = { 0, };
+	HWND editHwnd = GetDlgItem(hwnd, IDC_SELECTS);
+	GetWindowTextW(editHwnd, currentContent, 1000);
 
-	// Get the process name.
-	if (NULL != processHandle)
-	{
-		DWORD successFunc = GetModuleFileNameEx( // GetModuleBaseNameW : 실행 파일명
-			processHandle,
-			0,
-			szProcessName,
-			sizeof(szProcessName) / sizeof(WCHAR));
-		if (NULL != successFunc)
-		{
-			std::wstring addItem(wcsrchr(szProcessName, L'\\') + 1);
-			addItem += L"(PID: ";
-			addItem += std::to_wstring(processID);
-			addItem += L")";
-			ListBox_AddString(hwnd, addItem.c_str());
-		}
-	}
-	CloseHandle(processHandle);
+	std::wstring output = std::wstring(inputPID) + L"|" + std::wstring(currentContent);
+	SetWindowTextW(editHwnd, output.c_str());
+}
+
+BOOL CMainDlg::StartCollect(HWND hwnd)
+{
+	WCHAR currentContent[1000] = { 0, };
+	HWND editHwnd = GetDlgItem(hwnd, IDC_SELECTS);
+	GetWindowTextW(editHwnd, currentContent, 1000);
+
+
+
+	return 0;
 }

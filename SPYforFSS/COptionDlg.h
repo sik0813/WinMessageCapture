@@ -1,14 +1,5 @@
 #pragma once
-#include "sameInclude.h"
-
-#define OPTIONLEN 8192
-
-typedef struct options {
-	CHAR msgOption[OPTIONLEN]; // 8192(윈도우 메시지 크기 1byte)
-	CHAR printOption; // 1
-	DWORD maxLine; // 4
-}options;
-
+#include "commonInclude.h"
 
 class COptionDlg
 {

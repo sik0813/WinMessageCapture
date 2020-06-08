@@ -1,7 +1,8 @@
 #pragma once
-#include "sameInclude.h"
+#include "commonInclude.h"
 #include "CCollectDlg.h"
 #include <Psapi.h>
+
 
 static INT_PTR CALLBACK RunProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
@@ -15,6 +16,7 @@ private:
 	HINSTANCE parentInstance = NULL;
 	HWND ownHwnd = NULL;
 	DWORD counter = 0;
+
 public:
 	BOOL Show(HINSTANCE _parentInstance);
 	
@@ -27,7 +29,12 @@ public:
 	void Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify);
 	
 	// 현재 프로세스 리스트 조회 및 표시
-	void PrintProcessNameAndID(DWORD processID, HWND hwnd);
-	BOOL ShowProcessList(HWND hwnd);
+	BOOL RefreshList(HWND hwnd);
+
+	// PIDLIST 에서 더블 클릭한 항목 삽입
+	void InsertClickProcess(HWND hwndCtl, HWND hwnd);
+
+	// EditControl(IDC_SELELTS)의 내용을 읽어서 파싱하고 해당 개수 만큼 CCollect 생성
+	BOOL StartCollect(HWND hwnd);
 
 };

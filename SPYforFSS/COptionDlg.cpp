@@ -17,20 +17,18 @@ BOOL COptionDlg::Show(HINSTANCE _parentInstance)
 
 INT_PTR CALLBACK COptionDlg::RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	COptionDlg* pThis = (COptionDlg*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
+	COptionDlg* pointerThis = (COptionDlg*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
 	switch (uMsg)
 	{
 	case WM_INITDIALOG:
 		SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)lParam);
-		pThis = (COptionDlg*)lParam;
-		pThis->ownHwnd = hwnd;
-		HANDLE_WM_INITDIALOG(hwnd, wParam, lParam, pThis->InitDialog);
-		//pThis->InitDialog(hwnd, (HWND)(wParam), lParam);
+		pointerThis = (COptionDlg*)lParam;
+		pointerThis->ownHwnd = hwnd;
+		pointerThis->InitDialog(hwnd, (HWND)(wParam), lParam);
 		break;
 
 	case WM_COMMAND:
-		HANDLE_WM_COMMAND(hwnd, wParam, lParam, pThis->Command);
-		//pThis->Command(hwnd, (int)(LOWORD(wParam)), (HWND)(lParam), (UINT)HIWORD(wParam));
+		pointerThis->Command(hwnd, (int)(LOWORD(wParam)), (HWND)(lParam), (UINT)HIWORD(wParam));
 		break;
 	}
 

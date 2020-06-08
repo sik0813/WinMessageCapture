@@ -169,7 +169,7 @@
     <ClInclude Include="CMainDlg.h" />
     <ClInclude Include="COptionDlg.h" />
     <ClInclude Include="resource.h" />
-    <ClInclude Include="sameInclude.h" />
+    <ClInclude Include="commonInclude.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\MessageSYP\MessageSYP.vcxproj">
