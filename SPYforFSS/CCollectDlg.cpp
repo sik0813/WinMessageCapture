@@ -8,10 +8,9 @@ CCollectDlg::~CCollectDlg()
 {
 }
 
-BOOL CCollectDlg::Show(HINSTANCE _parentInstance)
+BOOL CCollectDlg::Show()
 {
-	parentInstance = _parentInstance;
-	DialogBoxParamW(parentInstance, MAKEINTRESOURCEW(IDD_COLLECTPAGE), NULL, CCollectDlg::RunProc, (LPARAM)this);
+	DialogBoxParamW(NULL, MAKEINTRESOURCEW(IDD_COLLECTPAGE), NULL, CCollectDlg::RunProc, (LPARAM)this);
 	return TRUE;
 }
 
@@ -59,7 +58,7 @@ void CCollectDlg::Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
 
 	case IDC_OPTION:
 		COptionDlg option;
-		option.Show(parentInstance);
+		option.Show();
 		//option.~COptionDlg();
 		break;
 	}

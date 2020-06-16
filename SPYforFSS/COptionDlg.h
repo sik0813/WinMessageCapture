@@ -11,7 +11,7 @@ private:
 	HINSTANCE parentInstance = NULL;
 	HWND ownHwnd = NULL;
 public:
-	BOOL Show(HINSTANCE _parentInstance);
+	BOOL Show();
 
 	static INT_PTR CALLBACK RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 

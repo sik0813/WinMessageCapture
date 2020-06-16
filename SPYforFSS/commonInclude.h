@@ -3,24 +3,26 @@
 #include <windowsx.h>
 #include <string>
 #include <vector>
-
+#include <map>
 #include "resource.h"
 
 #define OPTIONLEN 8192
 
-typedef struct options {
-	CHAR msgOption[OPTIONLEN]; // 8192(윈도우 메시지 크기 1byte)
-	CHAR printOption; // 1
-	DWORD maxLine; // 4
-}options;
-
-typedef struct settingData {
-	WCHAR processName[MAX_PATH]; // 260 * 2 = 520
-	HWND wndHwnd; // 8
-	CHAR activeFlag; // 1
-	options option;
-}settingData;
-
-extern settingData sendSettingData[20];
-extern HANDLE mappingHandle;
-extern settingData* sendBuf;
+typedef struct sendData
+{
+	WCHAR processName[MAX_PATH];
+	DWORD processID;
+	DWORD MessageCode;
+	WCHAR MessageContent[64];
+	WPARAM wParam;
+	LPARAM lParam;
+	sendData()
+	{
+		memset(&processName, 0, MAX_PATH);
+		processID = 0;
+		MessageCode = 0;
+		memset(&MessageContent, 0, 64);
+		wParam = NULL;
+		lParam = NULL;
+	}
+}sendData, *LPSendData;

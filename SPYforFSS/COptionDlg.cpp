@@ -8,10 +8,9 @@ COptionDlg::~COptionDlg()
 {
 }
 
-BOOL COptionDlg::Show(HINSTANCE _parentInstance)
+BOOL COptionDlg::Show()
 {
-	parentInstance = _parentInstance;
-	DialogBoxParamW(parentInstance, MAKEINTRESOURCEW(IDD_OPTIONPAGE), NULL, COptionDlg::RunProc, (LPARAM)this);
+	DialogBoxParamW(NULL, MAKEINTRESOURCEW(IDD_OPTIONPAGE), NULL, COptionDlg::RunProc, (LPARAM)this);
 	return TRUE;
 }
 

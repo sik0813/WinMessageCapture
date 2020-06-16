@@ -5,10 +5,22 @@ CMainDlg* CMainDlg::procAccess = 0;
 CMainDlg::CMainDlg()
 {
 	procAccess = this;
+	writeEvent = CreateEventW(NULL, FALSE, TRUE, L"SPYFSSwirterE");
+	readerEvent = CreateEventW(NULL, FALSE, TRUE, L"SPYFSSreaderE");
+	writeMutex = CreateMutexW(NULL, FALSE, L"SPYFSSwirterM");
+	readerMutex = CreateMutexW(NULL, FALSE, L"SPYFSSreaderM");
+	otherProcessMutex = CreateMutexW(NULL, FALSE, L"SPYFSSotherProcessM");
 }
 
 CMainDlg::~CMainDlg()
 {
+	UnmapViewOfFile(recvDataBuf);
+	CloseHandle(sharedMemory);
+	CloseHandle(writeEvent);
+	CloseHandle(readerEvent);
+	CloseHandle(writeMutex);
+	CloseHandle(readerMutex);
+	CloseHandle(otherProcessMutex);
 }
 
 static INT_PTR CALLBACK RunProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -17,10 +29,66 @@ static INT_PTR CALLBACK RunProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM 
 }
 
 
+int CMainDlg::InitTrasmission()
+{
+	ResetEvent(writeEvent);
+	ResetEvent(readerEvent);
+
+	HANDLE sharedMemory = CreateFileMapping(
+		INVALID_HANDLE_VALUE,    // use paging file
+		NULL,                    // default security
+		PAGE_READWRITE,          // read/write access
+		0,                       // maximum object size (high-order DWORD)
+		sizeof(sendData),                // maximum object size (low-order DWORD)
+		sharedMemoryName);                // name of mapping object
+
+	if (sharedMemory == NULL)
+	{
+		return 1;
+	}
+	recvDataBuf = (LPSendData)MapViewOfFile(sharedMemory,   // handle to map object
+		FILE_MAP_ALL_ACCESS, // read/write permission
+		0,
+		0,
+		sizeof(sendData));
+
+	if (recvDataBuf == NULL)
+	{
+		CloseHandle(sharedMemory);
+		return 1;
+	}
+	return 0;
+}
+
+UINT WINAPI CMainDlg::RecvDataThread(void *arg)
+{
+	((CMainDlg*)arg)->RecvData();
+	return 0;
+}
+
+
+
+BOOL CMainDlg::RecvData()
+{
+	while (true)
+	{
+		WaitForSingleObject(readerEvent, INFINITE);
+		DisPlay();
+		SetEvent(writeEvent);
+	}	
+	return TRUE;
+}
+
+BOOL CMainDlg::DisPlay()
+{
+
+	return TRUE;
+}
+
 BOOL CMainDlg::Show(HINSTANCE _parentInstance)
 {
-	parentInstance = _parentInstance;
-	DialogBoxParamW(parentInstance, MAKEINTRESOURCEW(IDD_MAINPAGE), NULL, ::RunProcMain, NULL);//(LPARAM)this);
+	_beginthreadex(NULL, 0, RecvDataThread, (void*)this, NULL, NULL);
+	DialogBoxParamW(_parentInstance, MAKEINTRESOURCEW(IDD_MAINPAGE), NULL, ::RunProcMain, NULL);//(LPARAM)this);
 	return TRUE;
 }
 
@@ -64,7 +132,7 @@ void CMainDlg::Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
 
 	case IDC_WATCH:
 		CCollectDlg collectDlg;
-		collectDlg.Show(parentInstance);
+		collectDlg.Show();
 		break;
 	}
 }
@@ -79,7 +147,8 @@ BOOL CMainDlg::InitDialog(HWND hwnd, HWND hwndFocus, LPARAM lParam)
 // 현재 프로세스 리스트 업데이트
 BOOL CMainDlg::RefreshList(HWND hwnd)
 {
-	// Get the list of process identifiers.
+	SetWindowTextW(GetDlgItem(hwnd, IDC_SELECTS), L"");
+	
 	DWORD processlist[1024] = { 0, }, listByte = 0;
 	BOOL sucessFunc = EnumProcesses(processlist, sizeof(processlist), &listByte);
 	if (NULL == sucessFunc)
@@ -130,12 +199,20 @@ void CMainDlg::InsertClickProcess(HWND hwndCtl, HWND hwnd)
 	int count = SendMessageW(hwndCtl, LB_GETCURSEL, 0, 0);
 	WCHAR inputPID[MAX_PATH] = { 0, };
 	SendMessageW(hwndCtl, LB_GETTEXT, (WPARAM)(count), (LPARAM)inputPID);
+	
+	std::wstring parsedInputPID(inputPID);
+	parsedInputPID = parsedInputPID.substr(0, parsedInputPID.find(L"("));
 
-	WCHAR currentContent[1000] = { 0, };
+	std::wstring currentContent = L"";
 	HWND editHwnd = GetDlgItem(hwnd, IDC_SELECTS);
-	GetWindowTextW(editHwnd, currentContent, 1000);
+	int editSelectslength = GetWindowTextLengthW(editHwnd);
+	if (0 != editSelectslength)
+	{
+		currentContent.resize(editSelectslength);
+		GetWindowTextW(editHwnd, &currentContent[0], editSelectslength + 1);
+	}	
+	std::wstring output = parsedInputPID + L'|' + currentContent;
 
-	std::wstring output = std::wstring(inputPID) + L"|" + std::wstring(currentContent);
 	SetWindowTextW(editHwnd, output.c_str());
 }
 
@@ -144,8 +221,6 @@ BOOL CMainDlg::StartCollect(HWND hwnd)
 	WCHAR currentContent[1000] = { 0, };
 	HWND editHwnd = GetDlgItem(hwnd, IDC_SELECTS);
 	GetWindowTextW(editHwnd, currentContent, 1000);
-
-
 
 	return 0;
 }
