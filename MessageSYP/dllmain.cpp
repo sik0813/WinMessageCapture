@@ -6,8 +6,6 @@
 #include <process.h>
 #include "CClient.h"
 
-#define SETTINGDATALEN 20
-
 HINSTANCE kdllInstance = NULL;
 static HHOOK kCallWnd = NULL;
 static HHOOK kHook = NULL;
@@ -17,17 +15,18 @@ CClient *nowClient = NULL;
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
 {
 	WCHAR processName[MAX_PATH] = { 0, };
+	GetModuleFileName(NULL, processName, sizeof(processName) / sizeof(WCHAR));
+	StringCchCopyW(processName, MAX_PATH, wcsrchr(processName, L'\\') + 1);
+	if (NULL == processName)
+	{
+		return FALSE;
+	}
+
 	switch (ul_reason_for_call)
 	{
 	case DLL_PROCESS_ATTACH:
-		kdllInstance = (HINSTANCE)hModule;
-		GetModuleFileName(NULL, processName, sizeof(processName) / sizeof(WCHAR));
-		nowClient = new CClient(processName, GetCurrentProcessId());
-		//if (0 == wcscmp(nowClient->GetProcessName(), L"notepad.exe"))
-		{
-			nowClient->Connect();
-		}
-		
+		kdllInstance = (HINSTANCE)hModule;		
+		nowClient = new CClient(processName, GetCurrentProcessId());		
 		break;
 
 	case DLL_THREAD_ATTACH:
@@ -67,10 +66,7 @@ LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
 	{
 		return CallNextHookEx(kCallWnd, nCode, wParam, lParam);
 	}
-
-	//if(0 != wcscmp(L"notepad.exe", nowClient->GetProcessName()))
-	//	return CallNextHookEx(kCallWnd, nCode, wParam, lParam);
-	
+		
 	if (NULL != nowClient->GetProcessName())
 	{
 		switch (nCode)
@@ -79,7 +75,7 @@ LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
 			if (0 != wParam)
 			{
 				LPCWPSTRUCT nowMsg = (LPCWPSTRUCT)lParam;
-				nowClient->MakeMsg(nowMsg->message, wmTranslation[nowMsg->message], nowMsg->wParam, nowMsg->lParam);
+				nowClient->MakeMsg(L'S', nowMsg->message, wmTranslation[nowMsg->message], nowMsg->wParam, nowMsg->lParam);
 				nowClient->SendMsg();
 			}
 			break;
@@ -106,60 +102,71 @@ LRESULT CALLBACK GetMsgProc(int nCode, WPARAM wParam, LPARAM lParam)
 
 CClient::CClient(LPWSTR _processName, DWORD _processID)
 {	
-	StringCchCopyW(curSendData.processName, MAX_PATH, wcsrchr(_processName, L'\\') + 1);
+	StringCchCopyW(curSendData.processName, MAX_PATH, _processName);
 	curSendData.processID = _processID;
-	
-	writeEvent = CreateEventW(NULL, FALSE, TRUE, L"SPYFSSwirterE");
-	readerEvent = CreateEventW(NULL, FALSE, TRUE, L"SPYFSSreaderE");
-	writeMutex = OpenMutexW(SYNCHRONIZE, TRUE, L"SPYFSSwirterM");
-	readerMutex = OpenMutexW(SYNCHRONIZE, TRUE, L"SPYFSSreaderM");
 }
 
-CClient::~CClient()
-{
-	UnmapViewOfFile(sendDataBuf);
-	CloseHandle(sharedMemory);
-	CloseHandle(writeEvent);
-	CloseHandle(readerEvent);
-	CloseHandle(writeMutex);
-	CloseHandle(readerMutex);
-}
+CClient::~CClient() {}
 
-int CClient::Connect()
+BOOL CClient::Connect()
 {
-	sharedMemory = OpenFileMappingW(
-		FILE_MAP_ALL_ACCESS,
-		TRUE,
-		sharedMemoryName);
-	if (sharedMemory == NULL)
+	pipeHandle = CreateFileW(
+		pipeName,   // pipe name 
+		GENERIC_READ | GENERIC_WRITE, // read and write access 
+		0,              // no sharing 
+		NULL,           // default security attributes
+		OPEN_EXISTING,  // opens existing pipe 
+		0,              // default attributes 
+		NULL);          // no template file 
+
+	if (INVALID_HANDLE_VALUE == pipeHandle)
 	{
-		return 1;
+		if (ERROR_PIPE_BUSY != GetLastError())
+		{
+			wprintf(L"Could not open pipe. GLE=%d\n", GetLastError());
+			return FALSE;
+		}
+
+		// 5초간 파이프 핸들 대기
+		if (!WaitNamedPipe(pipeName, PIPE_TIMEOUT))
+		{
+			printf("Could not open pipe: 5 second wait timed out.");
+			return FALSE;
+		}
 	}
 
-	sendDataBuf = (LPSendData)MapViewOfFile(sharedMemory,   // handle to map object
-		FILE_MAP_ALL_ACCESS, // read/write permission
-		0,
-		0,
-		sizeof(sendData));
-	if (sendDataBuf == NULL)
+	DWORD pipeMode = PIPE_READMODE_MESSAGE;
+	BOOL fSuccess = SetNamedPipeHandleState(
+		pipeHandle,    // pipe handle 
+		&pipeMode,	  // pipe mode 
+		NULL,		 // maximum bytes 
+		NULL);		// maximum time 
+	if (FALSE == fSuccess)
 	{
-		CloseHandle(sharedMemory);
-		return 1;
+		wprintf(L"SetNamedPipeHandleState failed. GLE=%d\n", GetLastError());
+		return FALSE;
 	}
 
-	return 0;
+	return TRUE;
 }
 
-void CClient::MakeMsg(DWORD _MessageCode, LPWSTR _MessageContent, WPARAM _wParam, LPARAM _lParam)
+void CClient::Disconnect()
 {
-	curSendData.MessageCode = _MessageCode;
-	if (NULL == _MessageContent)
+	FlushFileBuffers(pipeHandle);
+	CloseHandle(pipeHandle);
+}
+
+void CClient::MakeMsg(WCHAR _msgType, DWORD _msgCode, LPWSTR _msgContent, WPARAM _wParam, LPARAM _lParam)
+{
+	curSendData.msgType = _msgType;
+	curSendData.msgCode = _msgCode;
+	if (NULL == _msgContent)
 	{
-		StringCchCopyW(curSendData.MessageContent, 64, L"unknown");
+		StringCchCopyW(curSendData.msgContent, 64, L"unknown");
 	}
 	else
 	{
-		StringCchCopyW(curSendData.MessageContent, 64, _MessageContent);
+		StringCchCopyW(curSendData.msgContent, 64, _msgContent);
 	}
 	
 	curSendData.wParam = _wParam;
@@ -168,11 +175,32 @@ void CClient::MakeMsg(DWORD _MessageCode, LPWSTR _MessageContent, WPARAM _wParam
 
 BOOL CClient::SendMsg()
 {
-	WaitForSingleObject(writeMutex, INFINITE);
-	memcpy(sendDataBuf, &curSendData, sizeof(curSendData));
-	SetEvent(readerEvent);
-	WaitForSingleObject(writeEvent, INFINITE);
-	ReleaseMutex(writeMutex);
+	BOOL succFunc = Connect();
+	if (FALSE == succFunc)
+	{
+		Disconnect();
+		return FALSE;
+	}
+
+	OVERLAPPED ov;
+	memset(&ov, 0, sizeof(ov));
+
+	DWORD cbWritten = 0;
+	DWORD sendMsgLen = sizeof(curSendData);
+	succFunc = WriteFile(
+		pipeHandle,                  // pipe handle 
+		&curSendData,             // message 
+		sendMsgLen,              // message length 
+		&cbWritten,             // bytes written 
+		&ov);                  // not overlapped 
+	if (FALSE == succFunc)
+	{
+		wprintf(L"WriteFile to pipe failed. GLE=%d\n", GetLastError());
+		return FALSE;
+	}
+
+	Disconnect();
+
 	return TRUE;
 }
 

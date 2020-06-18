@@ -1,26 +1,38 @@
 #include "CMainDlg.h"
 
 CMainDlg* CMainDlg::procAccess = 0;
+BOOL CMainDlg::quitThread = FALSE;
 
 CMainDlg::CMainDlg()
 {
 	procAccess = this;
-	writeEvent = CreateEventW(NULL, FALSE, TRUE, L"SPYFSSwirterE");
-	readerEvent = CreateEventW(NULL, FALSE, TRUE, L"SPYFSSreaderE");
-	writeMutex = CreateMutexW(NULL, FALSE, L"SPYFSSwirterM");
-	readerMutex = CreateMutexW(NULL, FALSE, L"SPYFSSreaderM");
-	otherProcessMutex = CreateMutexW(NULL, FALSE, L"SPYFSSotherProcessM");
+	deleteDlg = CreateEventW(NULL, TRUE, TRUE, NULL);
+	SetEvent(deleteDlg);
 }
 
 CMainDlg::~CMainDlg()
 {
-	UnmapViewOfFile(recvDataBuf);
-	CloseHandle(sharedMemory);
-	CloseHandle(writeEvent);
-	CloseHandle(readerEvent);
-	CloseHandle(writeMutex);
-	CloseHandle(readerMutex);
-	CloseHandle(otherProcessMutex);
+	SYSTEM_INFO sysinfo;
+	GetSystemInfo(&sysinfo);
+	const int pipeSize = sysinfo.dwNumberOfProcessors;
+	const int threadSize = pipeSize * 2;
+	
+	quitThread = TRUE;
+	WaitForMultipleObjects(threadSize, threadHandles, TRUE, INFINITE);
+
+	for (int i = 0; i < pipeSize; i++)
+	{
+		CloseHandle(ioKeys[i].pipeHandle);
+	}
+
+	for (int i = 0; i < threadSize; i++)
+	{
+		CloseHandle(threadHandles[i]);
+	}
+
+	delete[] ioKeys;
+	delete[] threadHandles;
+	CloseHandle(deleteDlg);
 }
 
 static INT_PTR CALLBACK RunProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -29,65 +41,152 @@ static INT_PTR CALLBACK RunProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM 
 }
 
 
-int CMainDlg::InitTrasmission()
+BOOL CMainDlg::InitTrasmission()
 {
-	ResetEvent(writeEvent);
-	ResetEvent(readerEvent);
+	SYSTEM_INFO sysinfo;
+	GetSystemInfo(&sysinfo);
 
-	HANDLE sharedMemory = CreateFileMapping(
-		INVALID_HANDLE_VALUE,    // use paging file
-		NULL,                    // default security
-		PAGE_READWRITE,          // read/write access
-		0,                       // maximum object size (high-order DWORD)
-		sizeof(sendData),                // maximum object size (low-order DWORD)
-		sharedMemoryName);                // name of mapping object
+	const int pipeSize = sysinfo.dwNumberOfProcessors;
+	const int threadSize = pipeSize * 2;
+	HANDLE hPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, threadSize);
+	OVERLAPPED overLap;
+	memset(&overLap, 0, sizeof(overLap));
 
-	if (sharedMemory == NULL)
+	ioKeys = new IoKey[pipeSize];
+	//memcpy(ioKeys, 0, sizeof(IoKey) * threadSize);
+
+	for (int i = 0; i < pipeSize; i++)
 	{
-		return 1;
-	}
-	recvDataBuf = (LPSendData)MapViewOfFile(sharedMemory,   // handle to map object
-		FILE_MAP_ALL_ACCESS, // read/write permission
-		0,
-		0,
-		sizeof(sendData));
+		ioKeys[i].ioPort = hPort;
+		ioKeys[i].pipeHandle = CreateNamedPipeW(pipeName,
+			PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
+			PIPE_WAIT | PIPE_READMODE_MESSAGE | PIPE_TYPE_MESSAGE,
+			PIPE_UNLIMITED_INSTANCES,
+			0,
+			0,
+			INFINITE,
+			NULL
+		);
+		ioKeys[i].ov = &overLap;
+		ConnectNamedPipe(ioKeys[i].pipeHandle, ioKeys[i].ov);		
 
-	if (recvDataBuf == NULL)
-	{
-		CloseHandle(sharedMemory);
-		return 1;
+		if (INVALID_HANDLE_VALUE == ioKeys[i].pipeHandle)
+		{
+			return FALSE;
+		}
+		if (NULL == CreateIoCompletionPort(ioKeys[i].pipeHandle, hPort, (ULONG_PTR)&ioKeys[i], threadSize))
+		{
+			wprintf(L"IOCP connect Error");
+			return FALSE;
+		}
 	}
-	return 0;
+
+	PipeThread threadInput;
+	threadInput.curMainDlg = this;
+	threadInput.portHandle = hPort;
+
+	threadHandles = new HANDLE[threadSize];
+	for (int i = 0; i < threadSize; i++)
+	{
+		threadHandles[i] = (HANDLE)_beginthreadex(NULL, 0, RecvDataThread, (void*)&threadInput, NULL, NULL);
+		if (INVALID_HANDLE_VALUE == threadHandles[i])
+		{
+			return FALSE;
+		}
+
+	}
+
+	return TRUE;
 }
+
 
 UINT WINAPI CMainDlg::RecvDataThread(void *arg)
 {
-	((CMainDlg*)arg)->RecvData();
+	LPPipeThread nowClass = (LPPipeThread)arg;
+	nowClass->curMainDlg->RecvData(nowClass->portHandle);
 	return 0;
 }
 
 
-
-BOOL CMainDlg::RecvData()
+BOOL CMainDlg::RecvData(HANDLE portHandle)
 {
+	IoKey *nowKey = NULL;
+	WCHAR cBuf[BUFSIZ] = { 0, };
+	OVERLAPPED *ov;
+	
+	HANDLE readEvent = CreateEventW(NULL, FALSE, TRUE, NULL);
+	OVERLAPPED readFileOverlapped;
+	memset(&readFileOverlapped, 0, sizeof(OVERLAPPED));
+	readFileOverlapped.hEvent = readEvent;
+
 	while (true)
 	{
-		WaitForSingleObject(readerEvent, INFINITE);
-		DisPlay();
-		SetEvent(writeEvent);
-	}	
+		if (TRUE == quitThread)
+		{
+			break;
+		}
+
+		BOOL succFunc = FALSE;
+		DWORD readLen = 0, pipeRead = 0;
+		
+		succFunc = GetQueuedCompletionStatus(portHandle, &readLen, (PULONG_PTR)&nowKey, &ov, GETIOCP_TIMEOUT);
+		if (!succFunc) {
+			continue;
+		}
+
+		succFunc = ReadFile(nowKey->pipeHandle, &(nowKey->msgDataBuf), sizeof(MsgData), &pipeRead, &readFileOverlapped);
+		if (!succFunc)
+		{
+			DWORD readErr = GetLastError(); 
+			if (readErr == ERROR_IO_PENDING)
+			{
+				DWORD waitReturn = WaitForSingleObject(readEvent, 5000);
+				if (WAIT_FAILED == waitReturn)
+				{
+					wprintf(L"Fail ReadFile GLE=%d", GetLastError());
+				}
+				else if (WAIT_OBJECT_0 == waitReturn)
+				{
+					DisPlay(&(nowKey->msgDataBuf));
+				}
+			}
+			else 
+			{
+				wprintf(L"Fail Pending Error GLE=%d", GetLastError());
+			}
+		}
+		else
+		{
+			DisPlay(&(nowKey->msgDataBuf));
+		}		
+
+		DisconnectNamedPipe(nowKey->pipeHandle);
+		ConnectNamedPipe(nowKey->pipeHandle, nowKey->ov);
+	}
 	return TRUE;
 }
 
-BOOL CMainDlg::DisPlay()
+
+void CMainDlg::DisPlay(MsgData *inputMsgData)
 {
-
-	return TRUE;
+	std::wstring recvProcessName = std::wstring(inputMsgData->processName);
+	
+	// 10초 대기 후 진행
+	WaitForSingleObject(deleteDlg, 10000);
+	for (int i = 0; i < curCollectDlg[recvProcessName].size(); i++)
+	{
+		(curCollectDlg[recvProcessName][i])->InsertData(inputMsgData);
+	}
 }
+
 
 BOOL CMainDlg::Show(HINSTANCE _parentInstance)
 {
-	_beginthreadex(NULL, 0, RecvDataThread, (void*)this, NULL, NULL);
+	BOOL succFunc = InitTrasmission();
+	if (FALSE == succFunc)
+	{
+		MessageBoxW((HWND)_parentInstance, L"PIPE make Error", L"ERROR", MB_OK);
+	}
 	DialogBoxParamW(_parentInstance, MAKEINTRESOURCEW(IDD_MAINPAGE), NULL, ::RunProcMain, NULL);//(LPARAM)this);
 	return TRUE;
 }
@@ -108,6 +207,7 @@ INT_PTR CALLBACK CMainDlg::RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 
 	return FALSE;
 }
+
 
 void CMainDlg::Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
 {
@@ -131,8 +231,7 @@ void CMainDlg::Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
 		break;
 
 	case IDC_WATCH:
-		CCollectDlg collectDlg;
-		collectDlg.Show();
+		StartCollect(hwnd);
 		break;
 	}
 }
@@ -218,9 +317,52 @@ void CMainDlg::InsertClickProcess(HWND hwndCtl, HWND hwnd)
 
 BOOL CMainDlg::StartCollect(HWND hwnd)
 {
-	WCHAR currentContent[1000] = { 0, };
+	//LPWSTR currentContent = NULL;
+	std::map<std::wstring, BOOL> runList;
+	std::wstring currentContent;
 	HWND editHwnd = GetDlgItem(hwnd, IDC_SELECTS);
-	GetWindowTextW(editHwnd, currentContent, 1000);
+	DWORD editBoxLen = GetWindowTextLengthW(editHwnd);
+	currentContent.resize(editBoxLen);
+	
+	GetWindowTextW(editHwnd, &currentContent[0], 1000);
+	while (true)
+	{
+		size_t subLocation = currentContent.find(L"|");
+		std::wstring subString = currentContent.substr(0, subLocation);
+		currentContent = currentContent.substr(subLocation + 1);
+		if (0 == subString.size())
+		{
+			break;
+		}
 
+		runList[subString] = TRUE;
+
+		if (std::string::npos == subLocation)
+		{
+			break;
+		}
+	}
+
+	if (0 == runList.size()) return 0;
+
+	CCollectDlg* newCCollectDlg = new CCollectDlg();
+
+	for (auto i = runList.begin(); i != runList.end(); i++)
+	{
+		curCollectDlg[i->first].push_back(newCCollectDlg);
+	}
+
+	newCCollectDlg->Show();
+
+	ResetEvent(deleteDlg);
+	for (auto i = runList.begin(); i != runList.end(); i++)
+	{
+		(curCollectDlg[i->first]).erase(std::find((curCollectDlg[i->first]).begin(), (curCollectDlg[i->first]).end(), newCCollectDlg));
+	}
+	SetEvent(deleteDlg);
+
+	newCCollectDlg->~CCollectDlg();
+	delete newCCollectDlg;
+	
 	return 0;
 }

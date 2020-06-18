@@ -4,6 +4,24 @@
 #include <process.h>
 #include <Psapi.h>
 
+
+#define PIPE_TIMEOUT 5000
+#define GETIOCP_TIMEOUT 5000
+
+//IOCP completion key
+typedef struct _Iokey {
+	LPOVERLAPPED ov;
+	HANDLE pipeHandle;
+	HANDLE ioPort;
+	MsgData msgDataBuf;
+	_Iokey()
+	{
+		ov = NULL;
+		pipeHandle = INVALID_HANDLE_VALUE;
+		ioPort = NULL;
+	}
+}IoKey;
+
 static INT_PTR CALLBACK RunProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 class CMainDlg
@@ -15,32 +33,32 @@ public:
 private:
 	HWND ownHwnd = NULL;
 	DWORD counter = 0;
-	HANDLE recvDataThread = NULL;
 
-	HANDLE sharedMemory = NULL;
-	HANDLE writeEvent = NULL;
-	HANDLE readerEvent = NULL;
-	HANDLE writeMutex = NULL;
-	HANDLE readerMutex = NULL;
-	HANDLE otherProcessMutex = NULL;
+	LPCWSTR pipeName = L"\\\\.\\pipe\\SPYFSS";
+	
+	IoKey *ioKeys = NULL;
+	HANDLE *threadHandles = NULL;
+	HANDLE deleteDlg = NULL; // CCollectDlg 객체가 사라질 때 값 동기화
 
-	LPWSTR sharedMemoryName = L"SPYmemory"; // 공유메모리 이름
-	LPSendData recvDataBuf = NULL; // 공유메모리 접근 포인터
+	// Object 가지고 있을 map
+	std::map<std::wstring, std::vector<CCollectDlg*>> curCollectDlg;
 
 public:
-	int InitTrasmission();
-	static UINT WINAPI RecvDataThread(void *arg);
-	BOOL RecvData();
-	BOOL DisPlay();
-
-	BOOL Show(HINSTANCE _parentInstance);
-	
 	static CMainDlg* procAccess;
-	INT_PTR CALLBACK RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+	static BOOL quitThread;
 
+public:
+	// Pipe, Thread Pool 생성
+	BOOL InitTrasmission();
+	static UINT WINAPI RecvDataThread(void *arg);
+	BOOL RecvData(HANDLE portHandle);
+	void DisPlay(MsgData *msgData);
+
+	BOOL Show(HINSTANCE _parentInstance);	
+	
+	INT_PTR CALLBACK RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 	// 다이얼로그 초기화
 	BOOL InitDialog(HWND hwnd, HWND hwndFocus, LPARAM lParam);
-
 	void Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify);
 	
 	// 현재 프로세스 리스트 조회 및 표시
@@ -53,3 +71,14 @@ public:
 	BOOL StartCollect(HWND hwnd);
 
 };
+
+// ThreadPool 생성시 argment list
+typedef struct _PipeThread {
+	CMainDlg* curMainDlg;
+	HANDLE portHandle;
+	_PipeThread()
+	{
+		curMainDlg = NULL;
+		portHandle = NULL;
+	}
+}PipeThread, *LPPipeThread;

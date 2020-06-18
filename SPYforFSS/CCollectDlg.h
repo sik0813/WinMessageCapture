@@ -12,6 +12,8 @@ public:
 private:
 	HINSTANCE parentInstance = NULL;
 	HWND ownHwnd = NULL;
+	UINT countLine = 0;
+	BOOL showMsgData = FALSE;
 
 public:
 	BOOL Show();
@@ -20,6 +22,11 @@ public:
 
 	// 다이얼로그 초기화
 	BOOL InitDialog(HWND hwnd, HWND hwndFocus, LPARAM lParam);
-
 	void Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify);
+
+	// 입력 받은 데이터를 ListBox에 추가
+	void InsertData(MsgData *MsgData);
+
+	// 현재 ListBox 데이터 출력
+	BOOL SaveLog(HWND hwnd);
 };

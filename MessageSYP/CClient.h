@@ -1,26 +1,29 @@
 #pragma once
 #include <Windows.h>
 #include <string>
-#define OPTIONLEN 8192
 
-typedef struct sendData
+#define MSG_LEN 64
+#define PIPE_TIMEOUT 5000
+typedef struct _MsgData
 {
 	WCHAR processName[MAX_PATH];
 	DWORD processID;
-	DWORD MessageCode;
-	WCHAR MessageContent[64];
+	DWORD msgCode;
+	WCHAR msgContent[MSG_LEN];
 	WPARAM wParam;
 	LPARAM lParam;
-	sendData()
+	WCHAR msgType;
+	_MsgData()
 	{
 		memset(&processName, 0, MAX_PATH);
 		processID = 0;
-		MessageCode = 0;
-		memset(&MessageContent, 0, 64);
+		msgCode = 0;
+		memset(&msgContent, 0, MSG_LEN);
 		wParam = NULL;
 		lParam = NULL;
+		msgType = NULL;
 	}
-}sendData, *LPSendData;
+}MsgData, *LPMsgData;
 
 class CClient 
 {
@@ -29,19 +32,17 @@ public:
 	~CClient();
 
 private:
-	HANDLE writeEvent = NULL;
-	HANDLE readerEvent = NULL;
-	HANDLE writeMutex = NULL;
-	HANDLE readerMutex = NULL;
-	HANDLE sharedMemory = NULL;
+	LPCWSTR pipeName = L"\\\\.\\pipe\\SPYFSS";
+	HANDLE pipeHandle = INVALID_HANDLE_VALUE;
 
-	LPWSTR sharedMemoryName = L"Local\\SPYmemory";
-	LPSendData sendDataBuf = NULL;
-	sendData curSendData;
+	MsgData curSendData;
 
 public:
-	int Connect();
-	void MakeMsg(DWORD _MessageCode, LPWSTR _MessageContent, WPARAM _wParam, LPARAM _lParam);
+	void MakeMsg(WCHAR msgType, DWORD _msgCode, LPWSTR _msgContent, WPARAM _wParam, LPARAM _lParam);
 	BOOL SendMsg();
 	LPWSTR GetProcessName();
+
+private:
+	BOOL Connect();
+	void Disconnect();
 };

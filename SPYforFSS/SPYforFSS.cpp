@@ -5,10 +5,10 @@
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nShowCmd)
 {
-	CMainDlg tmp;
-	//StartHook();
-	tmp.Show(hInstance);
-	//StopHook();
+	CMainDlg mainDlg;
+	StartHook();
+	mainDlg.Show(hInstance);
+	StopHook();
 
 	return 0;
 }
