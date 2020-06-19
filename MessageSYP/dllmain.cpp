@@ -8,7 +8,7 @@
 
 HINSTANCE kdllInstance = NULL;
 static HHOOK kCallWnd = NULL;
-static HHOOK kHook = NULL;
+static HHOOK kCallWndRet = NULL;
 static HHOOK kGetMsg = NULL;
 CClient *nowClient = NULL;
 
@@ -26,7 +26,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 	{
 	case DLL_PROCESS_ATTACH:
 		kdllInstance = (HINSTANCE)hModule;		
-		nowClient = new CClient(processName, GetCurrentProcessId());		
+		nowClient = new CClient(processName, GetCurrentProcessId());
 		break;
 
 	case DLL_THREAD_ATTACH:
@@ -44,8 +44,8 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 EXPORT void StartHook(DWORD threadID)
 {
 	kCallWnd = SetWindowsHookExW(WH_CALLWNDPROC, (HOOKPROC)CallWndProc, kdllInstance, threadID); // send
-	//kHook = SetWindowsHookExW(WH_CALLWNDPROCRET, (HOOKPROC)Hookproc, kdllInstance, threadID); // return
-	//kGetMsg = SetWindowsHookExW(WH_GETMESSAGE, (HOOKPROC)GetMsgProc, kdllInstance, threadID); // post
+	kCallWndRet = SetWindowsHookExW(WH_CALLWNDPROCRET, (HOOKPROC)CallWndRetProc, kdllInstance, threadID); // return
+	kGetMsg = SetWindowsHookExW(WH_GETMESSAGE, (HOOKPROC)GetMsgProc, kdllInstance, threadID); // post
 	return;
 }
 
@@ -53,8 +53,8 @@ EXPORT void StartHook(DWORD threadID)
 EXPORT void StopHook(void)
 {
 	UnhookWindowsHookEx(kCallWnd);
-	//UnhookWindowsHookEx(kHook);
-	//UnhookWindowsHookEx(kGetMsg);
+	UnhookWindowsHookEx(kCallWndRet);
+	UnhookWindowsHookEx(kGetMsg);
 	return;
 }
 
@@ -89,14 +89,62 @@ LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
 }
 
 // SendMSG return
-LRESULT Hookproc(int nCode, WPARAM wParam, LPARAM lParam)
+LRESULT CallWndRetProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
-	return CallNextHookEx(kHook, nCode, wParam, lParam);
+	if (0 == wcscmp(L"SPYforFSS.exe", nowClient->GetProcessName()) ||
+		nCode < 0)
+	{
+		return CallNextHookEx(kCallWnd, nCode, wParam, lParam);
+	}
+
+	if (NULL != nowClient->GetProcessName())
+	{
+		switch (nCode)
+		{
+		case HC_ACTION:
+			if (0 != wParam)
+			{
+				CWPRETSTRUCT *nowMsg = (CWPRETSTRUCT*)lParam;
+				nowClient->MakeMsg(L'R', nowMsg->message, wmTranslation[nowMsg->message], nowMsg->wParam, nowMsg->lParam);
+				nowClient->SendMsg();
+			}
+			break;
+
+		default:
+			break;
+		}
+	}
+
+	return CallNextHookEx(kCallWndRet, nCode, wParam, lParam);
 }
 
 // PostMSG
 LRESULT CALLBACK GetMsgProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
+	if (0 == wcscmp(L"SPYforFSS.exe", nowClient->GetProcessName()) ||
+		nCode < 0)
+	{
+		return CallNextHookEx(kCallWnd, nCode, wParam, lParam);
+	}
+
+	if (NULL != nowClient->GetProcessName())
+	{
+		switch (nCode)
+		{
+		case HC_ACTION:
+			if (0 != wParam)
+			{
+				MSG *nowMsg = (MSG*)lParam;
+				nowClient->MakeMsg(L'P', nowMsg->message, wmTranslation[nowMsg->message], nowMsg->wParam, nowMsg->lParam);
+				nowClient->SendMsg();
+			}
+			break;
+
+		default:
+			break;
+		}
+	}
+
 	return CallNextHookEx(kGetMsg, nCode, wParam, lParam);
 }
 

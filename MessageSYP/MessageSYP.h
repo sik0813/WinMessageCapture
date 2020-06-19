@@ -25,7 +25,7 @@
 EXPORT void StartHook(DWORD threadID = 0);
 EXPORT void StopHook(void);
 LRESULT CALLBACK CallWndProc(int code, WPARAM wParam, LPARAM lParam);
-LRESULT Hookproc(int code, WPARAM wParam, LPARAM lParam);
+LRESULT CallWndRetProc(int code, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK GetMsgProc(int code, WPARAM wParam, LPARAM lParam);
 
 static std::map<int, LPWSTR> wmTranslation = {

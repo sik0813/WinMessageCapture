@@ -140,7 +140,7 @@ BOOL CMainDlg::RecvData(HANDLE portHandle)
 			DWORD readErr = GetLastError(); 
 			if (readErr == ERROR_IO_PENDING)
 			{
-				DWORD waitReturn = WaitForSingleObject(readEvent, 5000);
+				DWORD waitReturn = WaitForSingleObject(readEvent, 3000);
 				if (WAIT_FAILED == waitReturn)
 				{
 					wprintf(L"Fail ReadFile GLE=%d", GetLastError());
@@ -171,8 +171,8 @@ void CMainDlg::DisPlay(MsgData *inputMsgData)
 {
 	std::wstring recvProcessName = std::wstring(inputMsgData->processName);
 	
-	// 10초 대기 후 진행
-	WaitForSingleObject(deleteDlg, 10000);
+	// 7초 대기 후 진행
+	WaitForSingleObject(deleteDlg, 7000);
 	for (int i = 0; i < curCollectDlg[recvProcessName].size(); i++)
 	{
 		(curCollectDlg[recvProcessName][i])->InsertData(inputMsgData);
