@@ -16,7 +16,8 @@ private:
 	BOOL showMsgData = FALSE;
 
 public:
-	BOOL Show();
+	BOOL Start();
+	BOOL End();
 
 	static INT_PTR CALLBACK CCollectDlg::RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 

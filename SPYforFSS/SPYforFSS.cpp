@@ -7,7 +7,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 {
 	CMainDlg mainDlg;
 	StartHook();
-	mainDlg.Show(hInstance);
+	mainDlg.Start(hInstance);
+	mainDlg.End();
 	StopHook();
 
 	return 0;

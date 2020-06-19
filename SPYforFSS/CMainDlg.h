@@ -37,8 +37,14 @@ private:
 	LPCWSTR pipeName = L"\\\\.\\pipe\\SPYFSS";
 	
 	IoKey *ioKeys = NULL;
+	HANDLE hPort = NULL;
+	OVERLAPPED *overLaps = NULL;
+	HANDLE *eventHandles = NULL;
 	HANDLE *threadHandles = NULL;
 	HANDLE deleteDlg = NULL; // CCollectDlg 객체가 사라질 때 값 동기화
+
+	int pipeSize = 0;
+	int threadSize = 0;
 
 	// Object 가지고 있을 map
 	std::map<std::wstring, std::vector<CCollectDlg*>> curCollectDlg;
@@ -54,7 +60,8 @@ public:
 	BOOL RecvData(HANDLE portHandle);
 	void DisPlay(MsgData *msgData);
 
-	BOOL Show(HINSTANCE _parentInstance);	
+	BOOL Start(HINSTANCE _parentInstance);	
+	BOOL End();
 	
 	INT_PTR CALLBACK RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 	// 다이얼로그 초기화

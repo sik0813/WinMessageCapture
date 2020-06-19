@@ -8,30 +8,15 @@ CMainDlg::CMainDlg()
 	procAccess = this;
 	deleteDlg = CreateEventW(NULL, TRUE, TRUE, NULL);
 	SetEvent(deleteDlg);
+
+	SYSTEM_INFO sysinfo;
+	GetSystemInfo(&sysinfo);
+	pipeSize = sysinfo.dwNumberOfProcessors;
+	threadSize = pipeSize;
 }
 
 CMainDlg::~CMainDlg()
 {
-	SYSTEM_INFO sysinfo;
-	GetSystemInfo(&sysinfo);
-	const int pipeSize = sysinfo.dwNumberOfProcessors;
-	const int threadSize = pipeSize * 2;
-	
-	quitThread = TRUE;
-	WaitForMultipleObjects(threadSize, threadHandles, TRUE, INFINITE);
-
-	for (int i = 0; i < pipeSize; i++)
-	{
-		CloseHandle(ioKeys[i].pipeHandle);
-	}
-
-	for (int i = 0; i < threadSize; i++)
-	{
-		CloseHandle(threadHandles[i]);
-	}
-
-	delete[] ioKeys;
-	delete[] threadHandles;
 	CloseHandle(deleteDlg);
 }
 
@@ -43,17 +28,16 @@ static INT_PTR CALLBACK RunProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM 
 
 BOOL CMainDlg::InitTrasmission()
 {
-	SYSTEM_INFO sysinfo;
-	GetSystemInfo(&sysinfo);
+	hPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, threadSize);
 
-	const int pipeSize = sysinfo.dwNumberOfProcessors;
-	const int threadSize = pipeSize * 2;
-	HANDLE hPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, threadSize);
-	OVERLAPPED overLap;
-	memset(&overLap, 0, sizeof(overLap));
+	//OVERLAPPED overLap;
+	//memset(&overLap, 0, sizeof(overLap));
 
 	ioKeys = new IoKey[pipeSize];
-	//memcpy(ioKeys, 0, sizeof(IoKey) * threadSize);
+	overLaps = new OVERLAPPED[pipeSize];
+	memset(overLaps, 0, sizeof(overLaps));
+	eventHandles = new HANDLE[pipeSize];
+	memset(eventHandles, 0, sizeof(eventHandles));
 
 	for (int i = 0; i < pipeSize; i++)
 	{
@@ -67,9 +51,13 @@ BOOL CMainDlg::InitTrasmission()
 			INFINITE,
 			NULL
 		);
-		ioKeys[i].ov = &overLap;
-		ConnectNamedPipe(ioKeys[i].pipeHandle, ioKeys[i].ov);		
 
+		eventHandles[i] = CreateEventW(NULL, FALSE, TRUE, NULL);
+		overLaps[i].hEvent = eventHandles[i];
+
+		ioKeys[i].ov = &overLaps[i];
+		ConnectNamedPipe(ioKeys[i].pipeHandle, ioKeys[i].ov);
+		
 		if (INVALID_HANDLE_VALUE == ioKeys[i].pipeHandle)
 		{
 			return FALSE;
@@ -108,16 +96,20 @@ UINT WINAPI CMainDlg::RecvDataThread(void *arg)
 }
 
 
-BOOL CMainDlg::RecvData(HANDLE portHandle)
+BOOL CMainDlg::RecvData(HANDLE _portHandle)
 {
+	HANDLE portHandle = _portHandle;
 	IoKey *nowKey = NULL;
 	WCHAR cBuf[BUFSIZ] = { 0, };
-	OVERLAPPED *ov;
-	
+	LPOVERLAPPED ov = NULL;
+
 	HANDLE readEvent = CreateEventW(NULL, FALSE, TRUE, NULL);
 	OVERLAPPED readFileOverlapped;
 	memset(&readFileOverlapped, 0, sizeof(OVERLAPPED));
 	readFileOverlapped.hEvent = readEvent;
+
+	HANDLE delayHandle = CreateEventW(NULL, TRUE, TRUE, NULL);
+	ResetEvent(delayHandle);
 
 	while (true)
 	{
@@ -129,7 +121,9 @@ BOOL CMainDlg::RecvData(HANDLE portHandle)
 		BOOL succFunc = FALSE;
 		DWORD readLen = 0, pipeRead = 0;
 		
-		succFunc = GetQueuedCompletionStatus(portHandle, &readLen, (PULONG_PTR)&nowKey, &ov, GETIOCP_TIMEOUT);
+		succFunc = GetQueuedCompletionStatus(portHandle, &readLen, (PULONG_PTR)&nowKey, &ov, INFINITE);
+		//succFunc = GetQueuedCompletionStatusEx(portHandle, &ove, 1024, (PULONG_PTR)&nowKey, &ov, INFINITE);
+		//WaitForSingleObject(delayHandle, 5);
 		if (!succFunc) {
 			continue;
 		}
@@ -160,9 +154,12 @@ BOOL CMainDlg::RecvData(HANDLE portHandle)
 			DisPlay(&(nowKey->msgDataBuf));
 		}		
 
+		FlushFileBuffers(nowKey->pipeHandle);
 		DisconnectNamedPipe(nowKey->pipeHandle);
 		ConnectNamedPipe(nowKey->pipeHandle, nowKey->ov);
 	}
+	CloseHandle(delayHandle);
+
 	return TRUE;
 }
 
@@ -180,7 +177,7 @@ void CMainDlg::DisPlay(MsgData *inputMsgData)
 }
 
 
-BOOL CMainDlg::Show(HINSTANCE _parentInstance)
+BOOL CMainDlg::Start(HINSTANCE _parentInstance)
 {
 	BOOL succFunc = InitTrasmission();
 	if (FALSE == succFunc)
@@ -189,6 +186,29 @@ BOOL CMainDlg::Show(HINSTANCE _parentInstance)
 	}
 	DialogBoxParamW(_parentInstance, MAKEINTRESOURCEW(IDD_MAINPAGE), NULL, ::RunProcMain, NULL);//(LPARAM)this);
 	return TRUE;
+}
+
+BOOL CMainDlg::End()
+{
+	quitThread = TRUE;
+	WaitForMultipleObjects(threadSize, threadHandles, TRUE, INFINITE);
+
+	for (int i = 0; i < pipeSize; i++)
+	{
+		CloseHandle(ioKeys[i].pipeHandle);
+		CloseHandle(ioKeys[i].ov->hEvent);
+	}
+
+	for (int i = 0; i < threadSize; i++)
+	{
+		CloseHandle(threadHandles[i]);
+	}
+
+	delete[] overLaps;
+	delete[] eventHandles;
+	delete[] ioKeys;
+	delete[] threadHandles;
+	return 0;
 }
 
 
@@ -352,7 +372,7 @@ BOOL CMainDlg::StartCollect(HWND hwnd)
 		curCollectDlg[i->first].push_back(newCCollectDlg);
 	}
 
-	newCCollectDlg->Show();
+	newCCollectDlg->Start();
 
 	ResetEvent(deleteDlg);
 	for (auto i = runList.begin(); i != runList.end(); i++)

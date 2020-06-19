@@ -8,10 +8,16 @@ CCollectDlg::~CCollectDlg()
 {
 }
 
-BOOL CCollectDlg::Show()
+BOOL CCollectDlg::Start()
 {
+	//CreateDialogParamW(NULL, MAKEINTRESOURCEW(IDD_COLLECTPAGE), NULL, CCollectDlg::RunProc, (LPARAM)this);
 	DialogBoxParamW(NULL, MAKEINTRESOURCEW(IDD_COLLECTPAGE), NULL, CCollectDlg::RunProc, (LPARAM)this);
 	return TRUE;
+}
+
+BOOL CCollectDlg::End()
+{
+	return 0;
 }
 
 INT_PTR CALLBACK CCollectDlg::RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -61,7 +67,7 @@ void CCollectDlg::Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
 
 	case IDC_OPTION:
 		COptionDlg option;
-		option.Show();
+		option.Start();
 		//option.~COptionDlg();
 		break;
 	}

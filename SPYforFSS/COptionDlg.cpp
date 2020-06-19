@@ -8,7 +8,7 @@ COptionDlg::~COptionDlg()
 {
 }
 
-BOOL COptionDlg::Show()
+BOOL COptionDlg::Start()
 {
 	DialogBoxParamW(NULL, MAKEINTRESOURCEW(IDD_OPTIONPAGE), NULL, COptionDlg::RunProc, (LPARAM)this);
 	return TRUE;
