@@ -7,6 +7,7 @@
 #include "resource.h"
 
 #define MSG_LEN 64
+#define WM_CHILDEND (WM_USER+1)
 
 typedef struct _MsgData
 {

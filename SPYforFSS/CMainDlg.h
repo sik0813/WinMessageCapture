@@ -47,7 +47,8 @@ private:
 	int threadSize = 0;
 
 	// Object 가지고 있을 map
-	std::map<std::wstring, std::vector<CCollectDlg*>> curCollectDlg;
+	std::map<std::wstring, std::vector<std::pair<int, CCollectDlg*>>> curCollectDlg;
+	int curChildIndex = 0;
 
 public:
 	static CMainDlg* procAccess;
@@ -58,7 +59,7 @@ public:
 	BOOL InitTrasmission();
 	static UINT WINAPI RecvDataThread(void *arg);
 	BOOL RecvData(HANDLE portHandle);
-	void DisPlay(MsgData *msgData);
+	void DIsplay(MsgData *msgData);
 
 	BOOL Start(HINSTANCE _parentInstance);	
 	BOOL End();
@@ -73,9 +74,11 @@ public:
 	
 	// PIDLIST 에서 더블 클릭한 항목 삽입
 	void InsertClickProcess(HWND hwndCtl, HWND hwnd);
-
+	
 	// EditControl(IDC_SELELTS)의 내용을 읽어서 파싱하고 해당 개수 만큼 CCollect 생성
 	BOOL StartCollect(HWND hwnd);
+
+	BOOL EndCollect(int eraseIndex);
 
 };
 

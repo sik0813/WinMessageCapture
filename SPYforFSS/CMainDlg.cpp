@@ -76,7 +76,7 @@ BOOL CMainDlg::InitTrasmission()
 	threadHandles = new HANDLE[threadSize];
 	for (int i = 0; i < threadSize; i++)
 	{
-		threadHandles[i] = (HANDLE)_beginthreadex(NULL, 0, RecvDataThread, (void*)&threadInput, NULL, NULL);
+		threadHandles[i] = (HANDLE)_beginthreadex(NULL, 0, RecvDataThread, (void*)hPort, NULL, NULL);
 		if (INVALID_HANDLE_VALUE == threadHandles[i])
 		{
 			return FALSE;
@@ -90,10 +90,12 @@ BOOL CMainDlg::InitTrasmission()
 
 UINT WINAPI CMainDlg::RecvDataThread(void *arg)
 {
-	LPPipeThread nowClass = (LPPipeThread)arg;
-	nowClass->curMainDlg->RecvData(nowClass->portHandle);
+	procAccess->RecvData((HANDLE)arg);
+	//LPPipeThread nowClass = (LPPipeThread)arg;
+	//nowClass->curMainDlg->RecvData(nowClass->portHandle);
 	return 0;
 }
+
 
 
 BOOL CMainDlg::RecvData(HANDLE _portHandle)
@@ -121,7 +123,8 @@ BOOL CMainDlg::RecvData(HANDLE _portHandle)
 		BOOL succFunc = FALSE;
 		DWORD readLen = 0, pipeRead = 0;
 		
-		succFunc = GetQueuedCompletionStatus(portHandle, &readLen, (PULONG_PTR)&nowKey, &ov, INFINITE);
+		//GETIOCP_TIMEOUT: 5sec
+		succFunc = GetQueuedCompletionStatus(portHandle, &readLen, (PULONG_PTR)&nowKey, &ov, GETIOCP_TIMEOUT);
 		//succFunc = GetQueuedCompletionStatusEx(portHandle, &ove, 1024, (PULONG_PTR)&nowKey, &ov, INFINITE);
 		//WaitForSingleObject(delayHandle, 5);
 		if (!succFunc) {
@@ -141,7 +144,7 @@ BOOL CMainDlg::RecvData(HANDLE _portHandle)
 				}
 				else if (WAIT_OBJECT_0 == waitReturn)
 				{
-					DisPlay(&(nowKey->msgDataBuf));
+					DIsplay(&(nowKey->msgDataBuf));
 				}
 			}
 			else 
@@ -151,7 +154,7 @@ BOOL CMainDlg::RecvData(HANDLE _portHandle)
 		}
 		else
 		{
-			DisPlay(&(nowKey->msgDataBuf));
+			DIsplay(&(nowKey->msgDataBuf));
 		}		
 
 		FlushFileBuffers(nowKey->pipeHandle);
@@ -164,7 +167,7 @@ BOOL CMainDlg::RecvData(HANDLE _portHandle)
 }
 
 
-void CMainDlg::DisPlay(MsgData *inputMsgData)
+void CMainDlg::DIsplay(MsgData *inputMsgData)
 {
 	std::wstring recvProcessName = std::wstring(inputMsgData->processName);
 	
@@ -172,7 +175,7 @@ void CMainDlg::DisPlay(MsgData *inputMsgData)
 	WaitForSingleObject(deleteDlg, 7000);
 	for (int i = 0; i < curCollectDlg[recvProcessName].size(); i++)
 	{
-		(curCollectDlg[recvProcessName][i])->InsertData(inputMsgData);
+		(curCollectDlg[recvProcessName][i].second)->InsertData(inputMsgData);
 	}
 }
 
@@ -223,6 +226,10 @@ INT_PTR CALLBACK CMainDlg::RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 	case WM_COMMAND:
 		Command(hwnd, (int)(LOWORD(wParam)), (HWND)(lParam), (UINT)HIWORD(wParam));
 		break;
+
+	case WM_CHILDEND:
+		EndCollect((int)wParam);
+		break;
 	}
 
 	return FALSE;
@@ -234,8 +241,8 @@ void CMainDlg::Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
 	BOOL SuccessFuc = FALSE;
 	switch (id)
 	{
+	case IDOK: break;
 	case IDCANCEL:
-	case IDOK:
 		EndDialog(hwnd, id);
 		break;
 		
@@ -365,24 +372,37 @@ BOOL CMainDlg::StartCollect(HWND hwnd)
 
 	if (0 == runList.size()) return 0;
 
-	CCollectDlg* newCCollectDlg = new CCollectDlg();
+	CCollectDlg* newCCollectDlg = new CCollectDlg(curChildIndex);
 
 	for (auto i = runList.begin(); i != runList.end(); i++)
 	{
-		curCollectDlg[i->first].push_back(newCCollectDlg);
+		curCollectDlg[i->first].push_back(std::pair<int, CCollectDlg*>(curChildIndex, newCCollectDlg));
 	}
 
-	newCCollectDlg->Start();
+	newCCollectDlg->Start(hwnd);
+	curChildIndex++;
+	
+	return 0;
+}
 
+BOOL CMainDlg::EndCollect(int eraseIndex)
+{
 	ResetEvent(deleteDlg);
-	for (auto i = runList.begin(); i != runList.end(); i++)
+	for (auto i = curCollectDlg.begin(); i != curCollectDlg.end(); i++)
 	{
-		(curCollectDlg[i->first]).erase(std::find((curCollectDlg[i->first]).begin(), (curCollectDlg[i->first]).end(), newCCollectDlg));
+		int nextLoopSize = i->second.size();
+		for (int j = 0; j < nextLoopSize; j++)
+		{
+			if ((i->second)[j].first == eraseIndex)
+			{
+				(i->second)[j].second->End();
+				delete (i->second)[j].second;
+				(i->second).erase((i->second).begin() + j);
+				break;
+			}
+		}
 	}
 	SetEvent(deleteDlg);
 
-	newCCollectDlg->~CCollectDlg();
-	delete newCCollectDlg;
-	
-	return 0;
+	return TRUE;
 }

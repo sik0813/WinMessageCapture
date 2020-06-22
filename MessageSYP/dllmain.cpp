@@ -62,7 +62,6 @@ EXPORT void StopHook(void)
 LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
 	if (0 == wcscmp(L"SPYforFSS.exe", nowClient->GetProcessName()) ||
-		//true ||
 		nCode < 0)
 	{
 		return CallNextHookEx(kCallWnd, nCode, wParam, lParam);
@@ -93,7 +92,6 @@ LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
 LRESULT CallWndRetProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
 	if (0 == wcscmp(L"SPYforFSS.exe", nowClient->GetProcessName()) ||
-		//true ||
 		nCode < 0)
 	{
 		return CallNextHookEx(kCallWnd, nCode, wParam, lParam);
@@ -124,7 +122,6 @@ LRESULT CallWndRetProc(int nCode, WPARAM wParam, LPARAM lParam)
 LRESULT CALLBACK GetMsgProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
 	if (0 == wcscmp(L"SPYforFSS.exe", nowClient->GetProcessName()) ||
-		//true ||
 		nCode < 0)
 	{
 		return CallNextHookEx(kCallWnd, nCode, wParam, lParam);
