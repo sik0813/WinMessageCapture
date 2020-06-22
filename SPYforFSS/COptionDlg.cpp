@@ -8,9 +8,20 @@ COptionDlg::~COptionDlg()
 {
 }
 
-BOOL COptionDlg::Start()
+BOOL COptionDlg::Start(HWND _parentHwnd, LPSettingData _inputSetting)
 {
-	DialogBoxParamW(NULL, MAKEINTRESOURCEW(IDD_OPTIONPAGE), NULL, COptionDlg::RunProc, (LPARAM)this);
+	parentHwnd = _parentHwnd;
+	changeSettingData = *_inputSetting;
+	ownHwnd = CreateDialogParamW(NULL, MAKEINTRESOURCEW(IDD_OPTIONPAGE), NULL, COptionDlg::RunProc, (LPARAM)this);
+	ShowWindow(ownHwnd, SW_SHOW);
+	return TRUE;
+}
+
+BOOL COptionDlg::End()
+{
+	DestroyWindow(ownHwnd);
+	PostMessageW(parentHwnd, WM_SETOPTION, NULL, NULL);
+	
 	return TRUE;
 }
 
@@ -39,11 +50,29 @@ void COptionDlg::Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
 	BOOL SuccessFuc = FALSE;
 	switch (id)
 	{
-	case IDCANCEL:
 	case IDOK:
-		EndDialog(hwnd, id);
+		break;
+
+	case IDCANCEL:
+	case IDC_CANCLE:
+		changeOption = FALSE;
+		End();
+		break;
+
+	case IDC_START:
+		changeOption = TRUE;
+		End();
 		break;
 	}
+}
+
+void COptionDlg::GetOption(LPSettingData _inputSetting)
+{
+	if (FALSE == changeOption)
+	{
+		return;
+	}
+	*_inputSetting = changeSettingData;
 }
 
 // 다이얼로그 초기화

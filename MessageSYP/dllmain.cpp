@@ -26,14 +26,14 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 	{
 	case DLL_PROCESS_ATTACH:
 		kdllInstance = (HINSTANCE)hModule;		
-		nowClient = new CClient(processName, GetCurrentProcessId());
+		nowClient = new CClient();
+		nowClient->Start(processName, GetCurrentProcessId());
 		break;
 
 	case DLL_THREAD_ATTACH:
 	case DLL_THREAD_DETACH:
 		break;
 	case DLL_PROCESS_DETACH:
-		nowClient->~CClient();
 		delete nowClient;
 		break;
 	}
@@ -61,13 +61,13 @@ EXPORT void StopHook(void)
 // SendMSG
 LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
-	if (0 == wcscmp(L"SPYforFSS.exe", nowClient->GetProcessName()) ||
+	if (0 == wcscmp(L"SPYforFSS.exe", nowClient->processName) ||
 		nCode < 0)
 	{
 		return CallNextHookEx(kCallWnd, nCode, wParam, lParam);
 	}
 		
-	if (NULL != nowClient->GetProcessName())
+	if (NULL != nowClient->processName)
 	{
 		switch (nCode)
 		{
@@ -75,7 +75,7 @@ LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
 			if (0 != wParam)
 			{
 				LPCWPSTRUCT nowMsg = (LPCWPSTRUCT)lParam;
-				nowClient->MakeMsg(L'S', nowMsg->message, wmTranslation[nowMsg->message], nowMsg->wParam, nowMsg->lParam);
+				nowClient->MakeMsg(L'S', nowMsg->message, nowMsg->wParam, nowMsg->lParam);
 				nowClient->SendMsg();
 			}
 			break;
@@ -91,13 +91,13 @@ LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
 // SendMSG return
 LRESULT CallWndRetProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
-	if (0 == wcscmp(L"SPYforFSS.exe", nowClient->GetProcessName()) ||
+	if (0 == wcscmp(L"SPYforFSS.exe", nowClient->processName) ||
 		nCode < 0)
 	{
 		return CallNextHookEx(kCallWnd, nCode, wParam, lParam);
 	}
 
-	if (NULL != nowClient->GetProcessName())
+	if (NULL != nowClient->processName)
 	{
 		switch (nCode)
 		{
@@ -105,7 +105,7 @@ LRESULT CallWndRetProc(int nCode, WPARAM wParam, LPARAM lParam)
 			if (0 != wParam)
 			{
 				CWPRETSTRUCT *nowMsg = (CWPRETSTRUCT*)lParam;
-				nowClient->MakeMsg(L'R', nowMsg->message, wmTranslation[nowMsg->message], nowMsg->wParam, nowMsg->lParam);
+				nowClient->MakeMsg(L'R', nowMsg->message, nowMsg->wParam, nowMsg->lParam);
 				nowClient->SendMsg();
 			}
 			break;
@@ -121,13 +121,13 @@ LRESULT CallWndRetProc(int nCode, WPARAM wParam, LPARAM lParam)
 // PostMSG
 LRESULT CALLBACK GetMsgProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
-	if (0 == wcscmp(L"SPYforFSS.exe", nowClient->GetProcessName()) ||
+	if (0 == wcscmp(L"SPYforFSS.exe", nowClient->processName) ||
 		nCode < 0)
 	{
 		return CallNextHookEx(kCallWnd, nCode, wParam, lParam);
 	}
 
-	if (NULL != nowClient->GetProcessName())
+	if (NULL != nowClient->processName)
 	{
 		switch (nCode)
 		{
@@ -135,7 +135,7 @@ LRESULT CALLBACK GetMsgProc(int nCode, WPARAM wParam, LPARAM lParam)
 			if (0 != wParam)
 			{
 				MSG *nowMsg = (MSG*)lParam;
-				nowClient->MakeMsg(L'P', nowMsg->message, wmTranslation[nowMsg->message], nowMsg->wParam, nowMsg->lParam);
+				nowClient->MakeMsg(L'P', nowMsg->message, nowMsg->wParam, nowMsg->lParam);
 				nowClient->SendMsg();
 			}
 			break;
@@ -148,13 +148,19 @@ LRESULT CALLBACK GetMsgProc(int nCode, WPARAM wParam, LPARAM lParam)
 	return CallNextHookEx(kGetMsg, nCode, wParam, lParam);
 }
 
-CClient::CClient(LPWSTR _processName, DWORD _processID)
-{	
-	StringCchCopyW(curSendData.processName, MAX_PATH, _processName);
-	curSendData.processID = _processID;
+CClient::CClient()
+{
 }
 
 CClient::~CClient() {}
+
+void CClient::Start(LPWSTR _processName, DWORD _processId)
+{
+	memset(processName, 0, MAX_PATH);
+	StringCchCopyW(processName, wcslen(_processName) + 1, _processName);
+	StringCchCopyW(curSendData.processName, wcslen(_processName) + 1, _processName);
+	curSendData.processID = _processId;
+}
 
 BOOL CClient::Connect()
 {
@@ -204,18 +210,10 @@ void CClient::Disconnect()
 	CloseHandle(pipeHandle);
 }
 
-void CClient::MakeMsg(WCHAR _msgType, DWORD _msgCode, LPWSTR _msgContent, WPARAM _wParam, LPARAM _lParam)
+void CClient::MakeMsg(WCHAR _msgType, DWORD _msgCode, WPARAM _wParam, LPARAM _lParam)
 {
 	curSendData.msgType = _msgType;
 	curSendData.msgCode = _msgCode;
-	if (NULL == _msgContent)
-	{
-		StringCchCopyW(curSendData.msgContent, 64, L"unknown");
-	}
-	else
-	{
-		StringCchCopyW(curSendData.msgContent, 64, _msgContent);
-	}
 	
 	curSendData.wParam = _wParam;
 	curSendData.lParam = _lParam;
@@ -240,7 +238,7 @@ BOOL CClient::SendMsg()
 		&curSendData,             // message 
 		sendMsgLen,              // message length 
 		&cbWritten,             // bytes written 
-		&ov);                  // not overlapped 
+		&ov);                  // overlapped 
 	if (FALSE == succFunc)
 	{
 		wprintf(L"WriteFile to pipe failed. GLE=%d\n", GetLastError());
@@ -251,10 +249,4 @@ BOOL CClient::SendMsg()
 
 	return TRUE;
 }
-
-LPWSTR CClient::GetProcessName()
-{
-	return curSendData.processName;
-}
-
 

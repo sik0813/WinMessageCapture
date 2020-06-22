@@ -23,15 +23,16 @@ BOOL CCollectDlg::Start(HWND _parentHwnd)
 	{
 		return FALSE;
 	}
-
-	HWND CurCollectDlg = CreateDialogParamW(NULL, MAKEINTRESOURCEW(IDD_COLLECTPAGE), NULL, CCollectDlg::RunProc, (LPARAM)this);
-	ShowWindow(CurCollectDlg, SW_SHOW);
+	
+	ownHwnd = CreateDialogParamW(NULL, MAKEINTRESOURCEW(IDD_COLLECTPAGE), NULL, CCollectDlg::RunProc, (LPARAM)this);
+	ShowWindow(ownHwnd, SW_SHOW);
 	return TRUE;
 }
 
 BOOL CCollectDlg::End()
 {
-	//DestroyWindow(ownHwnd);
+	DestroyWindow(ownHwnd);
+
 	threadQuit = TRUE;
 	SetEvent(writeDataEvent);
 	SetEvent(readDataEvent);
@@ -44,8 +45,15 @@ BOOL CCollectDlg::End()
 	WaitForSingleObject(threadHandle, INFINITE);
 	CloseHandle(threadHandle);
 	threadHandle = INVALID_HANDLE_VALUE;
-	//queueInit(inputMsg);
-	
+
+	if (NULL != childOption)
+	{
+		childOption->End();
+		delete childOption;
+		childOption = NULL;
+	}
+
+	PostMessage(parentHwnd, WM_CHILDEND, (WPARAM)objectIndex, NULL);
 	return 0;
 }
 
@@ -57,12 +65,19 @@ INT_PTR CALLBACK CCollectDlg::RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARA
 	case WM_INITDIALOG:
 		SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)lParam);
 		pointerThis = (CCollectDlg*)lParam;
-		pointerThis->ownHwnd = hwnd;
+		//pointerThis->ownHwnd = hwnd;
 		pointerThis->InitDialog(hwnd, (HWND)(wParam), lParam);
 		break;
 
 	case WM_COMMAND:
 		pointerThis->Command(hwnd, (int)(LOWORD(wParam)), (HWND)(lParam), (UINT)HIWORD(wParam));
+		break;
+
+	case WM_SETOPTION:
+		pointerThis->childOption->GetOption(&(pointerThis->curSettingData));
+		pointerThis->childOption->End();
+		delete pointerThis->childOption;
+		pointerThis->childOption = NULL;
 		break;
 	}
 
@@ -82,9 +97,8 @@ void CCollectDlg::Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
 	switch (id)
 	{
 	case IDCANCEL:
-	case IDOK:
-		PostMessage(parentHwnd, WM_CHILDEND, (WPARAM)objectIndex, NULL);
-		DestroyWindow(hwnd);
+	case IDOK:		
+		End();
 		//EndDialog(hwnd, id);		
 		break;
 
@@ -97,9 +111,12 @@ void CCollectDlg::Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
 		break;
 
 	case IDC_OPTION:
-		COptionDlg option;
-		option.Start();
-		//option.~COptionDlg();
+		if (NULL != childOption)
+		{
+			break;
+		}
+		childOption = new COptionDlg();
+		childOption->Start(ownHwnd, &curSettingData);
 		break;
 	}
 }
@@ -140,7 +157,7 @@ void CCollectDlg::DisplayData()
 
 		if (FALSE == showMsgData)
 		{
-			//continue;
+			continue;
 		}
 
 		HWND listHwnd = GetDlgItem(ownHwnd, IDC_COLLECTLIST);
@@ -164,7 +181,15 @@ void CCollectDlg::DisplayData()
 		viewMsg += inputMsgData.msgType;
 
 		// Message Content 추가
-		viewMsg += L" [" + std::wstring(inputMsgData.msgContent) + L"]";
+		if (NULL == wmTranslation[inputMsgData.msgCode])
+		{
+			viewMsg += L" [unknown]";
+		}
+		else
+		{
+			viewMsg += L" [" + std::wstring(wmTranslation[inputMsgData.msgCode]) + L"]";
+		}
+		
 
 		// Message Code 추가
 		viewMsg += L"(" + std::to_wstring(inputMsgData.msgCode) + L")";

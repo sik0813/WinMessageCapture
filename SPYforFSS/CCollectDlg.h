@@ -16,13 +16,18 @@ private:
 
 	HWND ownHwnd = NULL;
 	UINT countLine = 0;
-	BOOL showMsgData = FALSE;
+	BOOL showMsgData = TRUE; // 시작(TRUE)/일시정지(FALSE)
 
 	std::queue<MsgData> inputMsg;
 	HANDLE threadHandle = INVALID_HANDLE_VALUE;
 	HANDLE readDataEvent = INVALID_HANDLE_VALUE;
 	HANDLE writeDataEvent = INVALID_HANDLE_VALUE;
 	BOOL threadQuit = FALSE;
+
+	HWND optionHwnd = NULL;
+
+	COptionDlg *childOption = NULL;
+	SettingData curSettingData;
 
 public:
 	BOOL Start(HWND _parentHwnd);

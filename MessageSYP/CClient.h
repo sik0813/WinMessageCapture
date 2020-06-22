@@ -9,7 +9,6 @@ typedef struct _MsgData
 	WCHAR processName[MAX_PATH];
 	DWORD processID;
 	DWORD msgCode;
-	WCHAR msgContent[MSG_LEN];
 	WPARAM wParam;
 	LPARAM lParam;
 	WCHAR msgType;
@@ -18,7 +17,6 @@ typedef struct _MsgData
 		memset(&processName, 0, MAX_PATH);
 		processID = 0;
 		msgCode = 0;
-		memset(&msgContent, 0, MSG_LEN);
 		wParam = NULL;
 		lParam = NULL;
 		msgType = NULL;
@@ -28,8 +26,9 @@ typedef struct _MsgData
 class CClient 
 {
 public:
-	CClient(LPWSTR _processName, DWORD _processID);
+	CClient();
 	~CClient();
+	void Start(LPWSTR _processName, DWORD _processId);
 
 private:
 	LPCWSTR pipeName = L"\\\\.\\pipe\\SPYFSS";
@@ -38,9 +37,11 @@ private:
 	MsgData curSendData;
 
 public:
-	void MakeMsg(WCHAR msgType, DWORD _msgCode, LPWSTR _msgContent, WPARAM _wParam, LPARAM _lParam);
+	WCHAR processName[MAX_PATH];
+
+public:
+	void MakeMsg(WCHAR msgType, DWORD _msgCode, WPARAM _wParam, LPARAM _lParam);
 	BOOL SendMsg();
-	LPWSTR GetProcessName();
 
 private:
 	BOOL Connect();

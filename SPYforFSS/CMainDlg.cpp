@@ -30,9 +30,6 @@ BOOL CMainDlg::InitTrasmission()
 {
 	hPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, threadSize);
 
-	//OVERLAPPED overLap;
-	//memset(&overLap, 0, sizeof(overLap));
-
 	ioKeys = new IoKey[pipeSize];
 	overLaps = new OVERLAPPED[pipeSize];
 	memset(overLaps, 0, sizeof(overLaps));
@@ -69,10 +66,6 @@ BOOL CMainDlg::InitTrasmission()
 		}
 	}
 
-	PipeThread threadInput;
-	threadInput.curMainDlg = this;
-	threadInput.portHandle = hPort;
-
 	threadHandles = new HANDLE[threadSize];
 	for (int i = 0; i < threadSize; i++)
 	{
@@ -91,8 +84,6 @@ BOOL CMainDlg::InitTrasmission()
 UINT WINAPI CMainDlg::RecvDataThread(void *arg)
 {
 	procAccess->RecvData((HANDLE)arg);
-	//LPPipeThread nowClass = (LPPipeThread)arg;
-	//nowClass->curMainDlg->RecvData(nowClass->portHandle);
 	return 0;
 }
 
@@ -109,10 +100,7 @@ BOOL CMainDlg::RecvData(HANDLE _portHandle)
 	OVERLAPPED readFileOverlapped;
 	memset(&readFileOverlapped, 0, sizeof(OVERLAPPED));
 	readFileOverlapped.hEvent = readEvent;
-
-	HANDLE delayHandle = CreateEventW(NULL, TRUE, TRUE, NULL);
-	ResetEvent(delayHandle);
-
+	
 	while (true)
 	{
 		if (TRUE == quitThread)
@@ -124,9 +112,7 @@ BOOL CMainDlg::RecvData(HANDLE _portHandle)
 		DWORD readLen = 0, pipeRead = 0;
 		
 		//GETIOCP_TIMEOUT: 5sec
-		succFunc = GetQueuedCompletionStatus(portHandle, &readLen, (PULONG_PTR)&nowKey, &ov, GETIOCP_TIMEOUT);
-		//succFunc = GetQueuedCompletionStatusEx(portHandle, &ove, 1024, (PULONG_PTR)&nowKey, &ov, INFINITE);
-		//WaitForSingleObject(delayHandle, 5);
+		succFunc = GetQueuedCompletionStatus(portHandle, &readLen, (PULONG_PTR)&nowKey, &ov, INFINITE);
 		if (!succFunc) {
 			continue;
 		}
@@ -161,7 +147,6 @@ BOOL CMainDlg::RecvData(HANDLE _portHandle)
 		DisconnectNamedPipe(nowKey->pipeHandle);
 		ConnectNamedPipe(nowKey->pipeHandle, nowKey->ov);
 	}
-	CloseHandle(delayHandle);
 
 	return TRUE;
 }
@@ -194,13 +179,12 @@ BOOL CMainDlg::Start(HINSTANCE _parentInstance)
 BOOL CMainDlg::End()
 {
 	quitThread = TRUE;
-	WaitForMultipleObjects(threadSize, threadHandles, TRUE, INFINITE);
-
 	for (int i = 0; i < pipeSize; i++)
 	{
 		CloseHandle(ioKeys[i].pipeHandle);
 		CloseHandle(ioKeys[i].ov->hEvent);
 	}
+	WaitForMultipleObjects(threadSize, threadHandles, TRUE, INFINITE);
 
 	for (int i = 0; i < threadSize; i++)
 	{
@@ -395,7 +379,7 @@ BOOL CMainDlg::EndCollect(int eraseIndex)
 		{
 			if ((i->second)[j].first == eraseIndex)
 			{
-				(i->second)[j].second->End();
+				//(i->second)[j].second->End();
 				delete (i->second)[j].second;
 				(i->second).erase((i->second).begin() + j);
 				break;
