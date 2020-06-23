@@ -5,9 +5,7 @@ BOOL CMainDlg::quitThread = FALSE;
 
 CMainDlg::CMainDlg()
 {
-	procAccess = this;
-	deleteDlg = CreateEventW(NULL, TRUE, TRUE, NULL);
-	SetEvent(deleteDlg);
+	procAccess = this;	
 
 	SYSTEM_INFO sysinfo;
 	GetSystemInfo(&sysinfo);
@@ -17,7 +15,6 @@ CMainDlg::CMainDlg()
 
 CMainDlg::~CMainDlg()
 {
-	CloseHandle(deleteDlg);
 }
 
 static INT_PTR CALLBACK RunProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -110,10 +107,13 @@ BOOL CMainDlg::RecvData(HANDLE _portHandle)
 
 		BOOL succFunc = FALSE;
 		DWORD readLen = 0, pipeRead = 0;
-		
+		MsgData recvData;
+		memset(&recvData, 0, sizeof(recvData));
+
 		//GETIOCP_TIMEOUT: 5sec
 		succFunc = GetQueuedCompletionStatus(portHandle, &readLen, (PULONG_PTR)&nowKey, &ov, INFINITE);
-		if (!succFunc) {
+		if (FALSE == succFunc)
+		{
 			continue;
 		}
 
@@ -130,7 +130,8 @@ BOOL CMainDlg::RecvData(HANDLE _portHandle)
 				}
 				else if (WAIT_OBJECT_0 == waitReturn)
 				{
-					DIsplay(&(nowKey->msgDataBuf));
+					memcpy(&recvData, &(nowKey->msgDataBuf), sizeof(MsgData));
+					DIsplay(recvData);
 				}
 			}
 			else 
@@ -140,7 +141,8 @@ BOOL CMainDlg::RecvData(HANDLE _portHandle)
 		}
 		else
 		{
-			DIsplay(&(nowKey->msgDataBuf));
+			memcpy(&recvData, &(nowKey->msgDataBuf), sizeof(MsgData));
+			DIsplay(recvData);
 		}		
 
 		FlushFileBuffers(nowKey->pipeHandle);
@@ -152,21 +154,25 @@ BOOL CMainDlg::RecvData(HANDLE _portHandle)
 }
 
 
-void CMainDlg::DIsplay(MsgData *inputMsgData)
+void CMainDlg::DIsplay(MsgData inputMsgData)
 {
-	std::wstring recvProcessName = std::wstring(inputMsgData->processName);
+	std::wstring recvProcessName = std::wstring(inputMsgData.processName);
 	
-	// 7초 대기 후 진행
-	WaitForSingleObject(deleteDlg, 7000);
+	//EnterCriticalSection(&writeCs);
+	WaitForSingleObject(deleteDlg, INFINITE);
 	for (int i = 0; i < curCollectDlg[recvProcessName].size(); i++)
 	{
 		(curCollectDlg[recvProcessName][i].second)->InsertData(inputMsgData);
 	}
+	//LeaveCriticalSection(&writeCs);
 }
 
 
 BOOL CMainDlg::Start(HINSTANCE _parentInstance)
 {
+	deleteDlg = CreateEventW(NULL, TRUE, TRUE, NULL);
+	SetEvent(deleteDlg);
+
 	BOOL succFunc = InitTrasmission();
 	if (FALSE == succFunc)
 	{
@@ -178,7 +184,11 @@ BOOL CMainDlg::Start(HINSTANCE _parentInstance)
 
 BOOL CMainDlg::End()
 {
+	CloseHandle(deleteDlg);
 	quitThread = TRUE;
+	
+	CloseHandle(ioKeys[0].ioPort);
+
 	for (int i = 0; i < pipeSize; i++)
 	{
 		CloseHandle(ioKeys[i].pipeHandle);
@@ -371,6 +381,7 @@ BOOL CMainDlg::StartCollect(HWND hwnd)
 
 BOOL CMainDlg::EndCollect(int eraseIndex)
 {
+	BOOL classDeleteDone = FALSE;
 	ResetEvent(deleteDlg);
 	for (auto i = curCollectDlg.begin(); i != curCollectDlg.end(); i++)
 	{
@@ -379,8 +390,11 @@ BOOL CMainDlg::EndCollect(int eraseIndex)
 		{
 			if ((i->second)[j].first == eraseIndex)
 			{
-				//(i->second)[j].second->End();
-				delete (i->second)[j].second;
+				if (FALSE == classDeleteDone)
+				{
+					delete (i->second)[j].second;
+					classDeleteDone = TRUE;
+				}				
 				(i->second).erase((i->second).begin() + j);
 				break;
 			}

@@ -40,7 +40,7 @@ public:
 	void Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify);
 
 	// 입력 받은 데이터를 ListBox에 추가
-	void InsertData(MsgData *MsgData);
+	void InsertData(MsgData MsgData);
 
 	static UINT WINAPI DisplayDataThread(void *arg);
 	void DisplayData();

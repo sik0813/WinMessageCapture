@@ -12,15 +12,17 @@ static HHOOK kCallWndRet = NULL;
 static HHOOK kGetMsg = NULL;
 CClient *nowClient = NULL;
 
+LPCWSTR deniedProcessName = L"SPYforFSS.exe";
+
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
 {
 	WCHAR processName[MAX_PATH] = { 0, };
 	GetModuleFileName(NULL, processName, sizeof(processName) / sizeof(WCHAR));
-	StringCchCopyW(processName, MAX_PATH, wcsrchr(processName, L'\\') + 1);
 	if (NULL == processName)
 	{
 		return FALSE;
 	}
+	StringCchCopyW(processName, MAX_PATH, wcsrchr(processName, L'\\') + 1);	
 
 	switch (ul_reason_for_call)
 	{
@@ -61,7 +63,7 @@ EXPORT void StopHook(void)
 // SendMSG
 LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
-	if (0 == wcscmp(L"SPYforFSS.exe", nowClient->processName) ||
+	if (0 == wcscmp(deniedProcessName, nowClient->processName) ||
 		nCode < 0)
 	{
 		return CallNextHookEx(kCallWnd, nCode, wParam, lParam);
@@ -91,7 +93,7 @@ LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
 // SendMSG return
 LRESULT CallWndRetProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
-	if (0 == wcscmp(L"SPYforFSS.exe", nowClient->processName) ||
+	if (0 == wcscmp(deniedProcessName, nowClient->processName) ||
 		nCode < 0)
 	{
 		return CallNextHookEx(kCallWnd, nCode, wParam, lParam);
@@ -121,7 +123,7 @@ LRESULT CallWndRetProc(int nCode, WPARAM wParam, LPARAM lParam)
 // PostMSG
 LRESULT CALLBACK GetMsgProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
-	if (0 == wcscmp(L"SPYforFSS.exe", nowClient->processName) ||
+	if (0 == wcscmp(deniedProcessName, nowClient->processName) ||
 		nCode < 0)
 	{
 		return CallNextHookEx(kCallWnd, nCode, wParam, lParam);

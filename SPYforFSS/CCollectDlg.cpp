@@ -121,11 +121,15 @@ void CCollectDlg::Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
 	}
 }
 
-void CCollectDlg::InsertData(MsgData *_inputMsgData)
+void CCollectDlg::InsertData(MsgData _inputMsgData)
 {
+	if (_inputMsgData.processName == NULL)
+	{
+		puts("Shit");
+	}
 	WaitForSingleObject(readDataEvent, INFINITE);
 	ResetEvent(writeDataEvent);
-	inputMsg.push(*_inputMsgData);
+	inputMsg.push(_inputMsgData);
 	SetEvent(writeDataEvent);
 }
 
@@ -139,7 +143,7 @@ void CCollectDlg::DisplayData()
 {
 	while (true)
 	{
-		WaitForSingleObject(writeDataEvent, INFINITE);
+		
 		if (TRUE == threadQuit)
 		{
 			break;
@@ -149,9 +153,16 @@ void CCollectDlg::DisplayData()
 		{
 			continue;
 		}
-
-		ResetEvent(readDataEvent);		
-		MsgData inputMsgData = inputMsg.front();
+		WaitForSingleObject(writeDataEvent, INFINITE);
+		ResetEvent(readDataEvent);
+		MsgData inputMsgData;
+		if (NULL == inputMsg.front().processName)
+		{
+			inputMsg.pop();
+			SetEvent(readDataEvent);
+			continue;
+		}
+		inputMsgData = inputMsg.front();
 		inputMsg.pop();
 		SetEvent(readDataEvent);
 
@@ -200,26 +211,77 @@ void CCollectDlg::DisplayData()
 		// lParam 추가
 		viewMsg += L"   lParam : " + std::to_wstring(inputMsgData.lParam);
 
-
+		
 		SendMessageW(listHwnd, LB_INSERTSTRING, (WPARAM)-1, (LPARAM)viewMsg.data());
+		int count = SendMessageW(listHwnd, LB_GETCOUNT, 0, 0);
+		SendMessageW(listHwnd, LB_SETTOPINDEX, (WPARAM)count-1, (LPARAM)0);
 	}
 }
 
 BOOL CCollectDlg::SaveLog(HWND hwnd)
 {
-	HWND ListBoxHwnd = GetDlgItem(hwnd, LB_INSERTSTRING);
+	HWND ListBoxHwnd = GetDlgItem(hwnd, IDC_COLLECTLIST);
 	UINT count = SendMessageW(ListBoxHwnd, LB_GETCOUNT, 0, 0);
-	
-	// 저장 경로 지정
 
+	// 저장 경로 지정
+	OPENFILENAMEW oFile;
+
+	WCHAR saveFileName[MAX_PATH] = { 0, };
+
+	memset(&oFile, 0, sizeof(oFile));
+
+	oFile.lStructSize = sizeof(oFile);
+	oFile.hwndOwner = NULL;
+	oFile.lpstrFilter = L"Text Files (*.txt)\0*.txt\0All Files (*.*)\0*.*\0";
+	oFile.lpstrFile = saveFileName;
+	oFile.nMaxFile = MAX_PATH;
+	oFile.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
+	oFile.lpstrDefExt = (LPCWSTR)L"txt";
+
+	BOOL succFunc = GetSaveFileNameW(&oFile);
+	if (FALSE == succFunc)
+	{
+		MessageBoxW(NULL, L"저장 취소", NULL, MB_OK);
+		return FALSE;
+	}
+
+	HANDLE fileHandle = CreateFileW(
+		saveFileName,
+		GENERIC_WRITE,
+		0,
+		NULL,
+		CREATE_ALWAYS,
+		FILE_ATTRIBUTE_NORMAL,
+		NULL);
+	if (INVALID_HANDLE_VALUE == fileHandle)
+	{
+		return FALSE;
+	}
+
+	DWORD returnLen = 0;
+	UINT textLen = 0;
+	LPWSTR curText = NULL;
+
+	unsigned short mark = 0xFEFF;
+	WriteFile(fileHandle, &mark, sizeof(mark), &returnLen, NULL);
+	
 	for (UINT i = 0; i < count; i++)
 	{
-		UINT testLen = SendMessageW(ListBoxHwnd, LB_GETTEXTLEN, (WPARAM)(0), (LPARAM)NULL);
-		LPWSTR curText = new WCHAR[testLen];
-		SendMessageW(ListBoxHwnd, LB_GETTEXT, (WPARAM)(count), (LPARAM)curText);
-		// 파일 쓰기
+		textLen = SendMessageW(ListBoxHwnd, LB_GETTEXTLEN, (WPARAM)(i), (LPARAM)NULL);
+		curText = new WCHAR[textLen + 1];
+		SendMessageW(ListBoxHwnd, LB_GETTEXT, (WPARAM)(i), (LPARAM)curText);
+		curText[textLen] = L'\n';
+
+		// 파일 쓰기		
+		WriteFile(fileHandle, curText, (textLen + 1) * sizeof(WCHAR), &returnLen, NULL);
+
 		delete[] curText;
+		returnLen = 0;
+		textLen = 0;
+		curText = NULL;
 	}
+
+	CloseHandle(fileHandle);
 
 	return TRUE;
 }
