@@ -27,3 +27,7 @@ EXPORT void StopHook(void);
 LRESULT CALLBACK CallWndProc(int code, WPARAM wParam, LPARAM lParam);
 LRESULT CallWndRetProc(int code, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK GetMsgProc(int code, WPARAM wParam, LPARAM lParam);
+
+std::map<std::wstring, BOOL> deniedProcessList = {
+	std::pair<std::wstring, BOOL>(L"SPYforFSS.exe", TRUE)
+};

@@ -31,6 +31,13 @@ BOOL CCollectDlg::Start(HWND _parentHwnd)
 
 BOOL CCollectDlg::End()
 {
+	if (NULL != childOption)
+	{
+		childOption->End(0);
+		delete childOption;
+		childOption = NULL;
+	}
+
 	DestroyWindow(ownHwnd);
 
 	threadQuit = TRUE;
@@ -44,14 +51,7 @@ BOOL CCollectDlg::End()
 
 	WaitForSingleObject(threadHandle, INFINITE);
 	CloseHandle(threadHandle);
-	threadHandle = INVALID_HANDLE_VALUE;
-
-	if (NULL != childOption)
-	{
-		childOption->End();
-		delete childOption;
-		childOption = NULL;
-	}
+	threadHandle = INVALID_HANDLE_VALUE;	
 
 	PostMessage(parentHwnd, WM_CHILDEND, (WPARAM)objectIndex, NULL);
 	return 0;
@@ -65,7 +65,7 @@ INT_PTR CALLBACK CCollectDlg::RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARA
 	case WM_INITDIALOG:
 		SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)lParam);
 		pointerThis = (CCollectDlg*)lParam;
-		//pointerThis->ownHwnd = hwnd;
+		pointerThis->ownHwnd = hwnd;
 		pointerThis->InitDialog(hwnd, (HWND)(wParam), lParam);
 		break;
 
@@ -74,8 +74,11 @@ INT_PTR CALLBACK CCollectDlg::RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARA
 		break;
 
 	case WM_SETOPTION:
-		pointerThis->childOption->GetOption(&(pointerThis->curSettingData));
-		pointerThis->childOption->End();
+		BOOL succFunc = pointerThis->childOption->GetOption(&(pointerThis->curSettingData));
+		if (TRUE == succFunc && FALSE == pointerThis->showMsgData)
+		{
+			pointerThis->showMsgData = TRUE;
+		}
 		delete pointerThis->childOption;
 		pointerThis->childOption = NULL;
 		break;
@@ -87,7 +90,11 @@ INT_PTR CALLBACK CCollectDlg::RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARA
 // 다이얼로그 초기화
 BOOL CCollectDlg::InitDialog(HWND hwnd, HWND hwndFocus, LPARAM lParam)
 {
+	startAndSuspend = GetDlgItem(hwnd, IDC_STARTSUSPEND);
+	SendMessageW(startAndSuspend, WM_SETTEXT, 0, (LPARAM)L"재생");
+
 	//Option 설정
+	PostMessageW(hwnd, WM_COMMAND, MAKEWPARAM(IDC_OPTION, IDC_OPTION), NULL);
 	return TRUE;
 }
 
@@ -97,12 +104,19 @@ void CCollectDlg::Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
 	switch (id)
 	{
 	case IDCANCEL:
-	case IDOK:		
+	case IDOK:
 		End();
-		//EndDialog(hwnd, id);		
 		break;
 
 	case IDC_STARTSUSPEND:
+		if (FALSE == showMsgData)
+		{
+			SendMessageW(startAndSuspend, WM_SETTEXT, 0, (LPARAM)L"일시정지");
+		}
+		else
+		{
+			SendMessageW(startAndSuspend, WM_SETTEXT, 0, (LPARAM)L"시작");
+		}
 		showMsgData = !showMsgData;
 		break;
 
@@ -123,10 +137,6 @@ void CCollectDlg::Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
 
 void CCollectDlg::InsertData(MsgData _inputMsgData)
 {
-	if (_inputMsgData.processName == NULL)
-	{
-		puts("Shit");
-	}
 	WaitForSingleObject(readDataEvent, INFINITE);
 	ResetEvent(writeDataEvent);
 	inputMsg.push(_inputMsgData);
@@ -151,9 +161,15 @@ void CCollectDlg::DisplayData()
 
 		if (inputMsg.size() == 0)
 		{
-			continue;
+			ResetEvent(writeDataEvent);
 		}
+
 		WaitForSingleObject(writeDataEvent, INFINITE);
+		if (TRUE == threadQuit)
+		{
+			break;
+		}
+
 		ResetEvent(readDataEvent);
 		MsgData inputMsgData;
 		if (NULL == inputMsg.front().processName)
@@ -166,7 +182,7 @@ void CCollectDlg::DisplayData()
 		inputMsg.pop();
 		SetEvent(readDataEvent);
 
-		if (FALSE == showMsgData)
+		if (FALSE == showMsgData || TRUE == threadQuit)
 		{
 			continue;
 		}
@@ -226,7 +242,7 @@ BOOL CCollectDlg::SaveLog(HWND hwnd)
 	// 저장 경로 지정
 	OPENFILENAMEW oFile;
 
-	WCHAR saveFileName[MAX_PATH] = { 0, };
+	WCHAR saveFileName[MAX_PATH] = L"log";
 
 	memset(&oFile, 0, sizeof(oFile));
 
@@ -262,6 +278,7 @@ BOOL CCollectDlg::SaveLog(HWND hwnd)
 	UINT textLen = 0;
 	LPWSTR curText = NULL;
 
+	// UTF-8 설정(WCHAR 출력)
 	unsigned short mark = 0xFEFF;
 	WriteFile(fileHandle, &mark, sizeof(mark), &returnLen, NULL);
 	

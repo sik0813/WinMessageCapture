@@ -63,13 +63,13 @@ EXPORT void StopHook(void)
 // SendMSG
 LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
-	if (0 == wcscmp(deniedProcessName, nowClient->processName) ||
+	if (deniedProcessList[nowClient->processName] ||
 		nCode < 0)
 	{
 		return CallNextHookEx(kCallWnd, nCode, wParam, lParam);
 	}
 		
-	if (NULL != nowClient->processName)
+	if (false == nowClient->processName.empty())
 	{
 		switch (nCode)
 		{
@@ -93,13 +93,13 @@ LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
 // SendMSG return
 LRESULT CallWndRetProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
-	if (0 == wcscmp(deniedProcessName, nowClient->processName) ||
+	if (deniedProcessList[nowClient->processName] ||
 		nCode < 0)
 	{
 		return CallNextHookEx(kCallWnd, nCode, wParam, lParam);
 	}
 
-	if (NULL != nowClient->processName)
+	if (false == nowClient->processName.empty())
 	{
 		switch (nCode)
 		{
@@ -123,13 +123,13 @@ LRESULT CallWndRetProc(int nCode, WPARAM wParam, LPARAM lParam)
 // PostMSG
 LRESULT CALLBACK GetMsgProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
-	if (0 == wcscmp(deniedProcessName, nowClient->processName) ||
+	if (deniedProcessList[nowClient->processName] ||
 		nCode < 0)
 	{
 		return CallNextHookEx(kCallWnd, nCode, wParam, lParam);
 	}
 
-	if (NULL != nowClient->processName)
+	if (false == nowClient->processName.empty())
 	{
 		switch (nCode)
 		{
@@ -151,15 +151,14 @@ LRESULT CALLBACK GetMsgProc(int nCode, WPARAM wParam, LPARAM lParam)
 }
 
 CClient::CClient()
-{
-}
+{}
 
-CClient::~CClient() {}
+CClient::~CClient() 
+{}
 
 void CClient::Start(LPWSTR _processName, DWORD _processId)
 {
-	memset(processName, 0, MAX_PATH);
-	StringCchCopyW(processName, wcslen(_processName) + 1, _processName);
+	processName = std::wstring(_processName);
 	StringCchCopyW(curSendData.processName, wcslen(_processName) + 1, _processName);
 	curSendData.processID = _processId;
 }

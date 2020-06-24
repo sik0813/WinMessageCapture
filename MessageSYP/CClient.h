@@ -37,8 +37,8 @@ private:
 	MsgData curSendData;
 
 public:
-	WCHAR processName[MAX_PATH];
-
+	std::wstring processName = L"";
+	
 public:
 	void MakeMsg(WCHAR msgType, DWORD _msgCode, WPARAM _wParam, LPARAM _lParam);
 	BOOL SendMsg();

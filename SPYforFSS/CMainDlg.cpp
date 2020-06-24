@@ -9,8 +9,9 @@ CMainDlg::CMainDlg()
 
 	SYSTEM_INFO sysinfo;
 	GetSystemInfo(&sysinfo);
-	pipeSize = sysinfo.dwNumberOfProcessors;
-	threadSize = pipeSize;
+	pipeSize = sysinfo.dwNumberOfProcessors / 2;
+	pipeSize = pipeSize == 0 ? 1 : pipeSize;
+	threadSize = pipeSize * 2;
 }
 
 CMainDlg::~CMainDlg()
@@ -107,11 +108,9 @@ BOOL CMainDlg::RecvData(HANDLE _portHandle)
 
 		BOOL succFunc = FALSE;
 		DWORD readLen = 0, pipeRead = 0;
-		MsgData recvData;
-		memset(&recvData, 0, sizeof(recvData));
 
 		//GETIOCP_TIMEOUT: 5sec
-		succFunc = GetQueuedCompletionStatus(portHandle, &readLen, (PULONG_PTR)&nowKey, &ov, INFINITE);
+		succFunc = GetQueuedCompletionStatus(portHandle, &readLen, (PULONG_PTR)&nowKey, &ov, GETIOCP_TIMEOUT);
 		if (FALSE == succFunc)
 		{
 			continue;
@@ -130,8 +129,7 @@ BOOL CMainDlg::RecvData(HANDLE _portHandle)
 				}
 				else if (WAIT_OBJECT_0 == waitReturn)
 				{
-					memcpy(&recvData, &(nowKey->msgDataBuf), sizeof(MsgData));
-					DIsplay(recvData);
+					DIsplay(nowKey->msgDataBuf);
 				}
 			}
 			else 
@@ -141,8 +139,7 @@ BOOL CMainDlg::RecvData(HANDLE _portHandle)
 		}
 		else
 		{
-			memcpy(&recvData, &(nowKey->msgDataBuf), sizeof(MsgData));
-			DIsplay(recvData);
+			DIsplay(nowKey->msgDataBuf);
 		}		
 
 		FlushFileBuffers(nowKey->pipeHandle);
@@ -154,8 +151,10 @@ BOOL CMainDlg::RecvData(HANDLE _portHandle)
 }
 
 
-void CMainDlg::DIsplay(MsgData inputMsgData)
+void CMainDlg::DIsplay(MsgData _inputMsgData)
 {
+	MsgData inputMsgData;
+	memcpy(&inputMsgData, &_inputMsgData, sizeof(MsgData));
 	std::wstring recvProcessName = std::wstring(inputMsgData.processName);
 	
 	//EnterCriticalSection(&writeCs);
@@ -170,6 +169,7 @@ void CMainDlg::DIsplay(MsgData inputMsgData)
 
 BOOL CMainDlg::Start(HINSTANCE _parentInstance)
 {
+	parentInstance = _parentInstance;
 	deleteDlg = CreateEventW(NULL, TRUE, TRUE, NULL);
 	SetEvent(deleteDlg);
 
@@ -178,6 +178,7 @@ BOOL CMainDlg::Start(HINSTANCE _parentInstance)
 	{
 		MessageBoxW((HWND)_parentInstance, L"PIPE make Error", L"ERROR", MB_OK);
 	}
+
 	DialogBoxParamW(_parentInstance, MAKEINTRESOURCEW(IDD_MAINPAGE), NULL, ::RunProcMain, NULL);//(LPARAM)this);
 	return TRUE;
 }
@@ -186,14 +187,15 @@ BOOL CMainDlg::End()
 {
 	CloseHandle(deleteDlg);
 	quitThread = TRUE;
-	
-	CloseHandle(ioKeys[0].ioPort);
 
 	for (int i = 0; i < pipeSize; i++)
 	{
 		CloseHandle(ioKeys[i].pipeHandle);
 		CloseHandle(ioKeys[i].ov->hEvent);
 	}
+
+	CloseHandle(ioKeys[0].ioPort);
+
 	WaitForMultipleObjects(threadSize, threadHandles, TRUE, INFINITE);
 
 	for (int i = 0; i < threadSize; i++)
@@ -260,6 +262,10 @@ void CMainDlg::Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
 // 다이얼로그 초기화
 BOOL CMainDlg::InitDialog(HWND hwnd, HWND hwndFocus, LPARAM lParam)
 {
+	HBITMAP hBitmap = LoadBitmapW(parentInstance, MAKEINTRESOURCE(IDB_REFRESH));
+	HWND hDlg = GetDlgItem(hwnd, IDC_REFRESH);
+	SendMessageW(hDlg, BM_SETIMAGE, 0, (LPARAM)hBitmap);
+
 	RefreshList(hwnd);
 	return TRUE;
 }

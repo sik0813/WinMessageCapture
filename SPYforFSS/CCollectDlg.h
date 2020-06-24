@@ -16,7 +16,8 @@ private:
 
 	HWND ownHwnd = NULL;
 	UINT countLine = 0;
-	BOOL showMsgData = TRUE; // 시작(TRUE)/일시정지(FALSE)
+	BOOL showMsgData = FALSE; // 시작(TRUE)/일시정지(FALSE)
+	HWND startAndSuspend;
 
 	std::queue<MsgData> inputMsg;
 	HANDLE threadHandle = INVALID_HANDLE_VALUE;

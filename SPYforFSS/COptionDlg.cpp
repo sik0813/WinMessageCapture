@@ -17,9 +17,10 @@ BOOL COptionDlg::Start(HWND _parentHwnd, LPSettingData _inputSetting)
 	return TRUE;
 }
 
-BOOL COptionDlg::End()
+BOOL COptionDlg::End(int quitCase)
 {
 	DestroyWindow(ownHwnd);
+	if(1 == quitCase)
 	PostMessageW(parentHwnd, WM_SETOPTION, NULL, NULL);
 	
 	return TRUE;
@@ -66,17 +67,17 @@ void COptionDlg::Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
 	}
 }
 
-void COptionDlg::GetOption(LPSettingData _inputSetting)
+BOOL COptionDlg::GetOption(LPSettingData _inputSetting)
 {
 	if (FALSE == changeOption)
 	{
-		return;
+		return FALSE;
 	}
 	*_inputSetting = changeSettingData;
+	return TRUE;
 }
 
 // 다이얼로그 초기화
-
 BOOL COptionDlg::InitDialog(HWND hwnd, HWND hwndFocus, LPARAM lParam)
 {
 	return TRUE;

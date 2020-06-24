@@ -31,6 +31,7 @@ public:
 	~CMainDlg();
 
 private:
+	HINSTANCE parentInstance = NULL;
 	HWND ownHwnd = NULL;
 	DWORD counter = 0;
 
