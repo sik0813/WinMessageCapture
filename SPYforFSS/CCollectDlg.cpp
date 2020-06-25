@@ -73,6 +73,10 @@ INT_PTR CALLBACK CCollectDlg::RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARA
 		pointerThis->Command(hwnd, (int)(LOWORD(wParam)), (HWND)(lParam), (UINT)HIWORD(wParam));
 		break;
 
+	case WM_CLOSE:
+		pointerThis->End();
+		break;
+
 	case WM_SETOPTION:
 		BOOL succFunc = pointerThis->childOption->GetOption(&(pointerThis->curSettingData));
 		if (TRUE == succFunc && FALSE == pointerThis->showMsgData)
@@ -94,7 +98,7 @@ BOOL CCollectDlg::InitDialog(HWND hwnd, HWND hwndFocus, LPARAM lParam)
 	SendMessageW(startAndSuspend, WM_SETTEXT, 0, (LPARAM)L"재생");
 
 	//Option 설정
-	PostMessageW(hwnd, WM_COMMAND, MAKEWPARAM(IDC_OPTION, IDC_OPTION), NULL);
+	//PostMessageW(hwnd, WM_COMMAND, MAKEWPARAM(IDC_OPTION, IDC_OPTION), NULL);
 	return TRUE;
 }
 
@@ -105,7 +109,7 @@ void CCollectDlg::Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
 	{
 	case IDCANCEL:
 	case IDOK:
-		End();
+		//End();
 		break;
 
 	case IDC_STARTSUSPEND:
@@ -172,6 +176,12 @@ void CCollectDlg::DisplayData()
 
 		ResetEvent(readDataEvent);
 		MsgData inputMsgData;
+		if (inputMsg.size() == 0)
+		{
+			SetEvent(readDataEvent);
+			continue;
+		}
+
 		if (NULL == inputMsg.front().processName)
 		{
 			inputMsg.pop();
@@ -198,10 +208,13 @@ void CCollectDlg::DisplayData()
 		viewMsg += lineNum + L"> ";
 
 		// Process Name 추가
-		viewMsg += L" [" + std::wstring(inputMsgData.processName) + L"]";
+		viewMsg += L" [" + std::wstring(inputMsgData.processName);
 
 		// Process ID 추가
-		viewMsg += L" [" + std::to_wstring(inputMsgData.processID) + L"]";
+		viewMsg += L" (" + std::to_wstring(inputMsgData.processID) + L")]";
+
+		// Thread ID 추가
+		viewMsg += L" [" + std::to_wstring(inputMsgData.threadID) + L"]";
 
 		// Msg type 추가
 		viewMsg += L" ";
@@ -222,10 +235,14 @@ void CCollectDlg::DisplayData()
 		viewMsg += L"(" + std::to_wstring(inputMsgData.msgCode) + L")";
 
 		// wParam 추가
-		viewMsg += L"   wParam : " + std::to_wstring(inputMsgData.wParam);
+		WCHAR buf[33] = { 0, };
+		wsprintf(buf, L"%X", inputMsgData.wParam);
+		viewMsg += L"   wParam : " + std::wstring(buf);
 
 		// lParam 추가
-		viewMsg += L"   lParam : " + std::to_wstring(inputMsgData.lParam);
+		memset(buf, 0, 33);
+		wsprintf(buf, L"%X", inputMsgData.lParam);
+		viewMsg += L"   lParam : " + std::wstring(buf);
 
 		
 		SendMessageW(listHwnd, LB_INSERTSTRING, (WPARAM)-1, (LPARAM)viewMsg.data());

@@ -1,11 +1,12 @@
 #include "CMainDlg.h"
+#include <ShlObj.h>
 
 CMainDlg* CMainDlg::procAccess = 0;
 BOOL CMainDlg::quitThread = FALSE;
 
 CMainDlg::CMainDlg()
 {
-	procAccess = this;	
+	procAccess = this;
 
 	SYSTEM_INFO sysinfo;
 	GetSystemInfo(&sysinfo);
@@ -34,6 +35,47 @@ BOOL CMainDlg::InitTrasmission()
 	eventHandles = new HANDLE[pipeSize];
 	memset(eventHandles, 0, sizeof(eventHandles));
 
+	SECURITY_DESCRIPTOR sd;
+	BOOL successFunc = InitializeSecurityDescriptor(
+		&sd,
+		SECURITY_DESCRIPTOR_REVISION);
+	if (!successFunc)
+	{
+		wprintf(L"InitializeSecurityDescriptor Fail \n");
+		return FALSE;
+	}
+
+	successFunc = SetSecurityDescriptorDacl(
+		&sd,
+		TRUE, // TRUE 세번째 인자 사용
+		NULL, // NULL allows all access to the objeclt
+		FALSE);
+	if (!successFunc)
+	{
+		wprintf(L"SetSecurityDescriptorDacl Fail \n");
+		return FALSE;
+	}
+
+	SECURITY_ATTRIBUTES sa;
+	memset(&sa, 0, sizeof(SECURITY_ATTRIBUTES));
+	sa.bInheritHandle = TRUE;
+	sa.lpSecurityDescriptor = &sd;
+
+	typedef BOOL(WINAPI *LPIsUserAnAdmin) (void);
+	LPIsUserAnAdmin IsUserAnAdmin = NULL;
+	CHAR szPath[MAX_PATH] = { 0, };
+	BOOL isAdmin = FALSE;
+
+	IsUserAnAdmin = (LPIsUserAnAdmin)GetProcAddress(GetModuleHandleW(L"shell32"), "IsUserAnAdmin");
+	if (IsUserAnAdmin != NULL)
+	{
+		if (TRUE == IsUserAnAdmin())
+		{
+			// 관리자 권한
+			isAdmin = TRUE;
+		}
+	}
+
 	for (int i = 0; i < pipeSize; i++)
 	{
 		ioKeys[i].ioPort = hPort;
@@ -44,15 +86,16 @@ BOOL CMainDlg::InitTrasmission()
 			0,
 			0,
 			INFINITE,
-			NULL
+			TRUE == isAdmin ? &sa : NULL
 		);
 
+		// overlaped read Event Handle
 		eventHandles[i] = CreateEventW(NULL, FALSE, TRUE, NULL);
 		overLaps[i].hEvent = eventHandles[i];
 
 		ioKeys[i].ov = &overLaps[i];
 		ConnectNamedPipe(ioKeys[i].pipeHandle, ioKeys[i].ov);
-		
+
 		if (INVALID_HANDLE_VALUE == ioKeys[i].pipeHandle)
 		{
 			return FALSE;
@@ -98,7 +141,7 @@ BOOL CMainDlg::RecvData(HANDLE _portHandle)
 	OVERLAPPED readFileOverlapped;
 	memset(&readFileOverlapped, 0, sizeof(OVERLAPPED));
 	readFileOverlapped.hEvent = readEvent;
-	
+
 	while (true)
 	{
 		if (TRUE == quitThread)
@@ -119,7 +162,7 @@ BOOL CMainDlg::RecvData(HANDLE _portHandle)
 		succFunc = ReadFile(nowKey->pipeHandle, &(nowKey->msgDataBuf), sizeof(MsgData), &pipeRead, &readFileOverlapped);
 		if (!succFunc)
 		{
-			DWORD readErr = GetLastError(); 
+			DWORD readErr = GetLastError();
 			if (readErr == ERROR_IO_PENDING)
 			{
 				DWORD waitReturn = WaitForSingleObject(readEvent, 3000);
@@ -132,7 +175,7 @@ BOOL CMainDlg::RecvData(HANDLE _portHandle)
 					DIsplay(nowKey->msgDataBuf);
 				}
 			}
-			else 
+			else
 			{
 				wprintf(L"Fail Pending Error GLE=%d", GetLastError());
 			}
@@ -140,7 +183,7 @@ BOOL CMainDlg::RecvData(HANDLE _portHandle)
 		else
 		{
 			DIsplay(nowKey->msgDataBuf);
-		}		
+		}
 
 		FlushFileBuffers(nowKey->pipeHandle);
 		DisconnectNamedPipe(nowKey->pipeHandle);
@@ -151,19 +194,17 @@ BOOL CMainDlg::RecvData(HANDLE _portHandle)
 }
 
 
-void CMainDlg::DIsplay(MsgData _inputMsgData)
+void CMainDlg::DIsplay(MsgData &_inputMsgData)
 {
-	MsgData inputMsgData;
-	memcpy(&inputMsgData, &_inputMsgData, sizeof(MsgData));
+	MsgData inputMsgData = _inputMsgData;
 	std::wstring recvProcessName = std::wstring(inputMsgData.processName);
-	
-	//EnterCriticalSection(&writeCs);
+
 	WaitForSingleObject(deleteDlg, INFINITE);
 	for (int i = 0; i < curCollectDlg[recvProcessName].size(); i++)
 	{
 		(curCollectDlg[recvProcessName][i].second)->InsertData(inputMsgData);
 	}
-	//LeaveCriticalSection(&writeCs);
+	//SetEvent(readEndEvent);
 }
 
 
@@ -194,7 +235,7 @@ BOOL CMainDlg::End()
 		CloseHandle(ioKeys[i].ov->hEvent);
 	}
 
-	CloseHandle(ioKeys[0].ioPort);
+	CloseHandle(hPort);
 
 	WaitForMultipleObjects(threadSize, threadHandles, TRUE, INFINITE);
 
@@ -241,7 +282,7 @@ void CMainDlg::Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
 	case IDCANCEL:
 		EndDialog(hwnd, id);
 		break;
-		
+
 	case IDC_PIDLIST:
 		if (codeNotify == LBN_DBLCLK)
 		{
@@ -266,7 +307,7 @@ BOOL CMainDlg::InitDialog(HWND hwnd, HWND hwndFocus, LPARAM lParam)
 	HWND hDlg = GetDlgItem(hwnd, IDC_REFRESH);
 	SendMessageW(hDlg, BM_SETIMAGE, 0, (LPARAM)hBitmap);
 
-	RefreshList(hwnd);
+	PostMessageW(hwnd, WM_COMMAND, MAKEWPARAM(IDC_REFRESH, IDC_REFRESH), NULL);
 	return TRUE;
 }
 
@@ -274,7 +315,7 @@ BOOL CMainDlg::InitDialog(HWND hwnd, HWND hwndFocus, LPARAM lParam)
 BOOL CMainDlg::RefreshList(HWND hwnd)
 {
 	SetWindowTextW(GetDlgItem(hwnd, IDC_SELECTS), L"");
-	
+
 	DWORD processlist[1024] = { 0, }, listByte = 0;
 	BOOL sucessFunc = EnumProcesses(processlist, sizeof(processlist), &listByte);
 	if (NULL == sucessFunc)
@@ -307,7 +348,7 @@ BOOL CMainDlg::RefreshList(HWND hwnd)
 					sizeof(szProcessName) / sizeof(WCHAR));
 				if (NULL != successFunc)
 				{
-					std::wstring addItem(wcsrchr(szProcessName, L'\\') + 1);
+					std::wstring addItem = std::wstring(wcsrchr(szProcessName, L'\\') + 1);
 					addItem += L"(PID: ";
 					addItem += std::to_wstring(processlist[i]);
 					addItem += L")";
@@ -325,7 +366,7 @@ void CMainDlg::InsertClickProcess(HWND hwndCtl, HWND hwnd)
 	int count = SendMessageW(hwndCtl, LB_GETCURSEL, 0, 0);
 	WCHAR inputPID[MAX_PATH] = { 0, };
 	SendMessageW(hwndCtl, LB_GETTEXT, (WPARAM)(count), (LPARAM)inputPID);
-	
+
 	std::wstring parsedInputPID(inputPID);
 	parsedInputPID = parsedInputPID.substr(0, parsedInputPID.find(L"("));
 
@@ -336,7 +377,7 @@ void CMainDlg::InsertClickProcess(HWND hwndCtl, HWND hwnd)
 	{
 		currentContent.resize(editSelectslength);
 		GetWindowTextW(editHwnd, &currentContent[0], editSelectslength + 1);
-	}	
+	}
 	std::wstring output = parsedInputPID + L'|' + currentContent;
 
 	SetWindowTextW(editHwnd, output.c_str());
@@ -345,12 +386,13 @@ void CMainDlg::InsertClickProcess(HWND hwndCtl, HWND hwnd)
 BOOL CMainDlg::StartCollect(HWND hwnd)
 {
 	//LPWSTR currentContent = NULL;
-	std::map<std::wstring, BOOL> runList;
+	//std::map<std::wstring, BOOL> runList;
+	std::vector<std::wstring> runList;
 	std::wstring currentContent;
 	HWND editHwnd = GetDlgItem(hwnd, IDC_SELECTS);
 	DWORD editBoxLen = GetWindowTextLengthW(editHwnd);
 	currentContent.resize(editBoxLen);
-	
+
 	GetWindowTextW(editHwnd, &currentContent[0], 1000);
 	while (true)
 	{
@@ -362,7 +404,8 @@ BOOL CMainDlg::StartCollect(HWND hwnd)
 			break;
 		}
 
-		runList[subString] = TRUE;
+		runList.push_back(subString);
+		//runList[subString] = TRUE;
 
 		if (std::string::npos == subLocation)
 		{
@@ -374,14 +417,14 @@ BOOL CMainDlg::StartCollect(HWND hwnd)
 
 	CCollectDlg* newCCollectDlg = new CCollectDlg(curChildIndex);
 
-	for (auto i = runList.begin(); i != runList.end(); i++)
+	for (auto x : runList)
 	{
-		curCollectDlg[i->first].push_back(std::pair<int, CCollectDlg*>(curChildIndex, newCCollectDlg));
+		curCollectDlg[x].push_back(std::pair<int, CCollectDlg*>(curChildIndex, newCCollectDlg));
 	}
 
 	newCCollectDlg->Start(hwnd);
 	curChildIndex++;
-	
+
 	return 0;
 }
 
@@ -400,7 +443,7 @@ BOOL CMainDlg::EndCollect(int eraseIndex)
 				{
 					delete (i->second)[j].second;
 					classDeleteDone = TRUE;
-				}				
+				}
 				(i->second).erase((i->second).begin() + j);
 				break;
 			}

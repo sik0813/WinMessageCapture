@@ -60,7 +60,7 @@ public:
 	BOOL InitTrasmission();
 	static UINT WINAPI RecvDataThread(void *arg);
 	BOOL RecvData(HANDLE portHandle);
-	void DIsplay(MsgData msgData);
+	void DIsplay(MsgData &msgData);
 
 	BOOL Start(HINSTANCE _parentInstance);	
 	BOOL End();

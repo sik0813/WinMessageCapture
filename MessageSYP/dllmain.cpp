@@ -20,22 +20,27 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 	GetModuleFileName(NULL, processName, sizeof(processName) / sizeof(WCHAR));
 	if (NULL == processName)
 	{
-		return FALSE;
+		return TRUE;
 	}
 	StringCchCopyW(processName, MAX_PATH, wcsrchr(processName, L'\\') + 1);	
+	if (NULL == processName)
+	{
+		return TRUE;
+	}
 
 	switch (ul_reason_for_call)
 	{
 	case DLL_PROCESS_ATTACH:
 		kdllInstance = (HINSTANCE)hModule;		
 		nowClient = new CClient();
-		nowClient->Start(processName, GetCurrentProcessId());
+		nowClient->Start(processName);
 		break;
 
 	case DLL_THREAD_ATTACH:
 	case DLL_THREAD_DETACH:
 		break;
 	case DLL_PROCESS_DETACH:
+		//nowClient->End();
 		delete nowClient;
 		break;
 	}
@@ -64,6 +69,7 @@ EXPORT void StopHook(void)
 LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
 	if (deniedProcessList[nowClient->processName] ||
+		NULL == nowClient ||
 		nCode < 0)
 	{
 		return CallNextHookEx(kCallWnd, nCode, wParam, lParam);
@@ -94,6 +100,7 @@ LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
 LRESULT CallWndRetProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
 	if (deniedProcessList[nowClient->processName] ||
+		NULL == nowClient ||
 		nCode < 0)
 	{
 		return CallNextHookEx(kCallWnd, nCode, wParam, lParam);
@@ -124,6 +131,7 @@ LRESULT CallWndRetProc(int nCode, WPARAM wParam, LPARAM lParam)
 LRESULT CALLBACK GetMsgProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
 	if (deniedProcessList[nowClient->processName] ||
+		NULL == nowClient ||
 		nCode < 0)
 	{
 		return CallNextHookEx(kCallWnd, nCode, wParam, lParam);
@@ -156,11 +164,19 @@ CClient::CClient()
 CClient::~CClient() 
 {}
 
-void CClient::Start(LPWSTR _processName, DWORD _processId)
+void CClient::Start(LPWSTR _processName)
 {
 	processName = std::wstring(_processName);
+	/*for (int i = 0; i < processName.size(); i++)
+	{
+		processName[i] = towlower(processName[i]);
+	}*/
 	StringCchCopyW(curSendData.processName, wcslen(_processName) + 1, _processName);
-	curSendData.processID = _processId;
+	curSendData.processID = GetCurrentProcessId();
+}
+
+void CClient::End()
+{
 }
 
 BOOL CClient::Connect()
@@ -218,6 +234,8 @@ void CClient::MakeMsg(WCHAR _msgType, DWORD _msgCode, WPARAM _wParam, LPARAM _lP
 	
 	curSendData.wParam = _wParam;
 	curSendData.lParam = _lParam;
+
+	curSendData.threadID = GetThreadId(GetCurrentThread());
 }
 
 BOOL CClient::SendMsg()
@@ -229,8 +247,10 @@ BOOL CClient::SendMsg()
 		return FALSE;
 	}
 
+	HANDLE writeEventHandle = CreateEventW(NULL, TRUE, TRUE, NULL);
 	OVERLAPPED ov;
 	memset(&ov, 0, sizeof(ov));
+	ov.hEvent = writeEventHandle;
 
 	DWORD cbWritten = 0;
 	DWORD sendMsgLen = sizeof(curSendData);
@@ -242,10 +262,28 @@ BOOL CClient::SendMsg()
 		&ov);                  // overlapped 
 	if (FALSE == succFunc)
 	{
-		wprintf(L"WriteFile to pipe failed. GLE=%d\n", GetLastError());
-		return FALSE;
+		DWORD lastError = GetLastError();
+		if (ERROR_IO_PENDING == lastError)
+		{
+			lastError = WaitForSingleObject(ov.hEvent, 2000);
+			if (WAIT_OBJECT_0 != lastError)
+			{
+				wprintf(L"WriteFile to pipe failed. GLE=%d\n", GetLastError());
+				CloseHandle(writeEventHandle);
+				Disconnect();
+				return FALSE;
+			}
+		}
+		else
+		{
+			wprintf(L"WriteFile to pipe failed. GLE=%d\n", GetLastError());
+			CloseHandle(writeEventHandle);
+			Disconnect();
+			return FALSE;
+		}
 	}
 
+	CloseHandle(writeEventHandle);
 	Disconnect();
 
 	return TRUE;

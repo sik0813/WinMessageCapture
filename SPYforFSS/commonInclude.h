@@ -14,14 +14,16 @@ typedef struct _MsgData
 {
 	WCHAR processName[MAX_PATH];
 	DWORD processID;
+	DWORD threadID;
 	DWORD msgCode;
+	WCHAR msgType;
 	WPARAM wParam;
 	LPARAM lParam;
-	WCHAR msgType;
 	_MsgData()
 	{
 		memset(&processName, 0, MAX_PATH);
 		processID = 0;
+		threadID = 0;
 		msgCode = 0;
 		wParam = NULL;
 		lParam = NULL;
