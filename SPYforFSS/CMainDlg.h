@@ -4,7 +4,7 @@
 #include <process.h>
 #include <Psapi.h>
 
-
+#define BUF_SIZE 4096
 #define PIPE_TIMEOUT 5000
 #define GETIOCP_TIMEOUT 5000
 
@@ -33,10 +33,18 @@ public:
 private:
 	HINSTANCE parentInstance = NULL;
 	HWND ownHwnd = NULL;
+	HWND curDlgHwnd = NULL;
 	DWORD counter = 0;
 
 	LPCWSTR pipeName = L"\\\\.\\pipe\\SPYFSS";
 	
+	/* Shared Memory Start */
+	LPCWSTR sharedMemName = L"Local\\SPYSendList";
+	LPCWSTR wrDoneEvent = L"listWriteDone";
+	HANDLE listWriteDone = NULL;
+	HANDLE hMapFile = NULL;
+	/* Shared Memory End */
+
 	IoKey *ioKeys = NULL;
 	HANDLE hPort = NULL;
 	OVERLAPPED *overLaps = NULL;
@@ -54,6 +62,7 @@ private:
 public:
 	static CMainDlg* procAccess;
 	static BOOL quitThread;
+	static LPWSTR pBuf;
 
 public:
 	// Pipe, Thread Pool 생성
@@ -76,11 +85,10 @@ public:
 	// PIDLIST 에서 더블 클릭한 항목 삽입
 	void InsertClickProcess(HWND hwndCtl, HWND hwnd);
 	
-	// EditControl(IDC_SELELTS)의 내용을 읽어서 파싱하고 해당 개수 만큼 CCollect 생성
+	// EditControl(IDC_SELELTS)의 내용을 읽어서 파싱하고 CCollect 생성
 	BOOL StartCollect(HWND hwnd);
-
 	BOOL EndCollect(int eraseIndex);
-
+	void UpdateSendList();
 };
 
 // ThreadPool 생성시 argment list

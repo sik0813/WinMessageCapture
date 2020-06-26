@@ -211,14 +211,10 @@ void CCollectDlg::DisplayData()
 		viewMsg += L" [" + std::wstring(inputMsgData.processName);
 
 		// Process ID 추가
-		viewMsg += L" (" + std::to_wstring(inputMsgData.processID) + L")]";
+		viewMsg += L" (" + std::to_wstring(inputMsgData.processID) + L")";
 
 		// Thread ID 추가
-		viewMsg += L" [" + std::to_wstring(inputMsgData.threadID) + L"]";
-
-		// Msg type 추가
-		viewMsg += L" ";
-		viewMsg += inputMsgData.msgType;
+		viewMsg += L"[" + std::to_wstring(inputMsgData.threadID) + L"]]";
 
 		// Message Content 추가
 		if (NULL == wmTranslation[inputMsgData.msgCode])
@@ -229,24 +225,112 @@ void CCollectDlg::DisplayData()
 		{
 			viewMsg += L" [" + std::wstring(wmTranslation[inputMsgData.msgCode]) + L"]";
 		}
-		
 
 		// Message Code 추가
-		viewMsg += L"(" + std::to_wstring(inputMsgData.msgCode) + L")";
+		WCHAR buf[32] = { 0, };
+		wsprintf(buf, L"0x%08X", inputMsgData.msgCode);
+		viewMsg += L"(" + std::wstring(buf) + L")";
 
-		// wParam 추가
-		WCHAR buf[33] = { 0, };
-		wsprintf(buf, L"%X", inputMsgData.wParam);
-		viewMsg += L"   wParam : " + std::wstring(buf);
+		switch (inputMsgData.hookType)
+		{
+		case MSG_CALLWND:
+			// Msg type 추가
+			viewMsg += L" S";
 
-		// lParam 추가
-		memset(buf, 0, 33);
-		wsprintf(buf, L"%X", inputMsgData.lParam);
-		viewMsg += L"   lParam : " + std::wstring(buf);
+			// wParam 추가
+			memset(buf, 0, 32);
+			wsprintf(buf, L"0x%08X", inputMsgData.wParam);
+			viewMsg += L"   wParam : " + std::wstring(buf);
+
+			// lParam 추가
+			memset(buf, 0, 32);
+			wsprintf(buf, L"0x%016X", inputMsgData.lParam);
+			viewMsg += L"   lParam : " + std::wstring(buf);
+			break;
+
+		case MSG_CALLWNDRET:
+			// Msg type 추가
+			viewMsg += L" R";
+
+			// wParam 추가
+			memset(buf, 0, 32);
+			wsprintf(buf, L"0x%08X", inputMsgData.wParam);
+			viewMsg += L"   wParam : " + std::wstring(buf);
+
+			// lParam 추가
+			memset(buf, 0, 32);
+			wsprintf(buf, L"0x%016X", inputMsgData.lParam);
+			viewMsg += L"   lParam : " + std::wstring(buf);
+			break;
+
+		case MSG_GETMSG:
+			// Msg type 추가
+			viewMsg += L" P";
+
+			// wParam 추가
+			memset(buf, 0, 32);
+			wsprintf(buf, L"0x%08X", inputMsgData.wParam);
+			viewMsg += L"   wParam : " + std::wstring(buf);
+
+			// lParam 추가
+			memset(buf, 0, 32);
+			wsprintf(buf, L"0x%016X", inputMsgData.lParam);
+			viewMsg += L"   lParam : " + std::wstring(buf);
+			break;
+
+		case MSG_KEYBOARD:
+			// wParam 추가 | virtual key code
+			memset(buf, 0, 32);
+			wsprintf(buf, L"0x%02X", inputMsgData.wParam);
+			viewMsg += L"   vKeyCode : " + std::wstring(buf);
+
+			// lParam 추가
+			memset(buf, 0, 32);
+			wsprintf(buf, L"0x%016X", inputMsgData.lParam);
+			viewMsg += L"   lParam: " + std::wstring(buf);
+			break;
+
+		case MSG_MOUSE:
+			// wParam, mouse message와 동일(생략)
+
+			// lParam 추가
+			memset(buf, 0, 32);
+			wsprintf(buf, L"x: %d, y: %d", LOWORD(inputMsgData.lParam), HIWORD(inputMsgData.lParam));
+			viewMsg += L"   x: " + std::wstring(buf);
+			break;
+
+		case MSG_MSGFILTER:
+			break;
+
+		default:
+			break;
+		}
+
+		switch (inputMsgData.msgCode)
+		{
+		case WM_CREATE:
+		case WM_SHOWWINDOW:
+		case WM_WINDOWPOSCHANGED:
+		case WM_STYLECHANGED:
+		case WM_NCACTIVATE:
+		case WM_SETTEXT:
+		case WM_SIZE:
+		case WM_MOVE:
+		case WM_DESTROY:
+			memset(buf, 0, 32);
+			wsprintf(buf, L"0x%08X", inputMsgData.hwnd);
+			//viewMsg += L"   hwnd : " + std::wstring(buf);
+			break;
+
+		default:
+			break;
+		}
+
+		
 
 		
 		SendMessageW(listHwnd, LB_INSERTSTRING, (WPARAM)-1, (LPARAM)viewMsg.data());
-		int count = SendMessageW(listHwnd, LB_GETCOUNT, 0, 0);
+		LRESULT count = SendMessageW(listHwnd, LB_GETCOUNT, 0, 0);
 		SendMessageW(listHwnd, LB_SETTOPINDEX, (WPARAM)count-1, (LPARAM)0);
 	}
 }
@@ -254,7 +338,7 @@ void CCollectDlg::DisplayData()
 BOOL CCollectDlg::SaveLog(HWND hwnd)
 {
 	HWND ListBoxHwnd = GetDlgItem(hwnd, IDC_COLLECTLIST);
-	UINT count = SendMessageW(ListBoxHwnd, LB_GETCOUNT, 0, 0);
+	LRESULT count = SendMessageW(ListBoxHwnd, LB_GETCOUNT, 0, 0);
 
 	// 저장 경로 지정
 	OPENFILENAMEW oFile;
@@ -292,7 +376,7 @@ BOOL CCollectDlg::SaveLog(HWND hwnd)
 	}
 
 	DWORD returnLen = 0;
-	UINT textLen = 0;
+	LRESULT textLen = 0;
 	LPWSTR curText = NULL;
 
 	// UTF-8 설정(WCHAR 출력)

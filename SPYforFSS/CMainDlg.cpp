@@ -3,6 +3,7 @@
 
 CMainDlg* CMainDlg::procAccess = 0;
 BOOL CMainDlg::quitThread = FALSE;
+LPWSTR CMainDlg::pBuf = FALSE;
 
 CMainDlg::CMainDlg()
 {
@@ -36,6 +37,7 @@ BOOL CMainDlg::InitTrasmission()
 	memset(eventHandles, 0, sizeof(eventHandles));
 
 	SECURITY_DESCRIPTOR sd;
+	memset(&sd, 0, sizeof(SECURITY_DESCRIPTOR));
 	BOOL successFunc = InitializeSecurityDescriptor(
 		&sd,
 		SECURITY_DESCRIPTOR_REVISION);
@@ -115,9 +117,8 @@ BOOL CMainDlg::InitTrasmission()
 		{
 			return FALSE;
 		}
-
 	}
-
+	
 	return TRUE;
 }
 
@@ -220,12 +221,49 @@ BOOL CMainDlg::Start(HINSTANCE _parentInstance)
 		MessageBoxW((HWND)_parentInstance, L"PIPE make Error", L"ERROR", MB_OK);
 	}
 
+	listWriteDone = CreateEventW(NULL, TRUE, TRUE, wrDoneEvent);
+	ResetEvent(listWriteDone);
+
+	hMapFile = CreateFileMappingW(
+		INVALID_HANDLE_VALUE,    // use paging file
+		NULL,                    // default security
+		PAGE_READWRITE,          // read/write access
+		0,                       // maximum object size (high-order DWORD)
+		BUF_SIZE,                // maximum object size (low-order DWORD)
+		sharedMemName);                 // name of mapping object
+	if (hMapFile == NULL)
+	{
+		wprintf(L"Could not create file mapping object (%d).\n", GetLastError());
+		return FALSE;
+	}
+
+	pBuf = (LPWSTR)MapViewOfFile(hMapFile,   // handle to map object
+		FILE_MAP_ALL_ACCESS, // read/write permission
+		0,
+		0,
+		BUF_SIZE);
+	if (pBuf == NULL)
+	{
+		wprintf(L"Could not map view of file (%d).\n", GetLastError());
+		CloseHandle(hMapFile);
+		return FALSE;
+	}
+	memset(&pBuf, 0, BUF_SIZE);
+
 	DialogBoxParamW(_parentInstance, MAKEINTRESOURCEW(IDD_MAINPAGE), NULL, ::RunProcMain, NULL);//(LPARAM)this);
+	//curDlgHwnd = CreateDialogParamW(_parentInstance, MAKEINTRESOURCEW(IDD_MAINPAGE), NULL, ::RunProcMain, NULL);//(LPARAM)this);
+	//ShowWindow(curDlgHwnd, SW_SHOW);	
 	return TRUE;
 }
 
 BOOL CMainDlg::End()
 {
+	UnmapViewOfFile(pBuf);
+
+	SetEvent(listWriteDone);
+	CloseHandle(listWriteDone);
+	CloseHandle(hMapFile);
+
 	CloseHandle(deleteDlg);
 	quitThread = TRUE;
 
@@ -267,6 +305,10 @@ INT_PTR CALLBACK CMainDlg::RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 	case WM_CHILDEND:
 		EndCollect((int)wParam);
 		break;
+
+	case WM_LISTEDITDONE:
+		UpdateSendList();
+		break;
 	}
 
 	return FALSE;
@@ -281,6 +323,7 @@ void CMainDlg::Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
 	case IDOK: break;
 	case IDCANCEL:
 		EndDialog(hwnd, id);
+		//DestroyWindow(curDlgHwnd);
 		break;
 
 	case IDC_PIDLIST:
@@ -306,7 +349,7 @@ BOOL CMainDlg::InitDialog(HWND hwnd, HWND hwndFocus, LPARAM lParam)
 	HBITMAP hBitmap = LoadBitmapW(parentInstance, MAKEINTRESOURCE(IDB_REFRESH));
 	HWND hDlg = GetDlgItem(hwnd, IDC_REFRESH);
 	SendMessageW(hDlg, BM_SETIMAGE, 0, (LPARAM)hBitmap);
-
+	ownHwnd = hwnd;
 	PostMessageW(hwnd, WM_COMMAND, MAKEWPARAM(IDC_REFRESH, IDC_REFRESH), NULL);
 	return TRUE;
 }
@@ -363,7 +406,7 @@ BOOL CMainDlg::RefreshList(HWND hwnd)
 
 void CMainDlg::InsertClickProcess(HWND hwndCtl, HWND hwnd)
 {
-	int count = SendMessageW(hwndCtl, LB_GETCURSEL, 0, 0);
+	LRESULT count = SendMessageW(hwndCtl, LB_GETCURSEL, 0, 0);
 	WCHAR inputPID[MAX_PATH] = { 0, };
 	SendMessageW(hwndCtl, LB_GETTEXT, (WPARAM)(count), (LPARAM)inputPID);
 
@@ -425,6 +468,8 @@ BOOL CMainDlg::StartCollect(HWND hwnd)
 	newCCollectDlg->Start(hwnd);
 	curChildIndex++;
 
+	PostMessageW(ownHwnd, WM_LISTEDITDONE, NULL, NULL);
+
 	return 0;
 }
 
@@ -434,7 +479,7 @@ BOOL CMainDlg::EndCollect(int eraseIndex)
 	ResetEvent(deleteDlg);
 	for (auto i = curCollectDlg.begin(); i != curCollectDlg.end(); i++)
 	{
-		int nextLoopSize = i->second.size();
+		size_t nextLoopSize = i->second.size();
 		for (int j = 0; j < nextLoopSize; j++)
 		{
 			if ((i->second)[j].first == eraseIndex)
@@ -450,6 +495,21 @@ BOOL CMainDlg::EndCollect(int eraseIndex)
 		}
 	}
 	SetEvent(deleteDlg);
-
+	PostMessageW(ownHwnd, WM_LISTEDITDONE, NULL, NULL);
 	return TRUE;
+}
+
+void CMainDlg::UpdateSendList()
+{
+	std::wstring sendList = L"";
+	for (auto i = curCollectDlg.begin(); i != curCollectDlg.end(); i++)
+	{
+		if (0 < i->second.size()) // 0 보다 큰 항목에 대하여 list 구성
+		{
+			sendList += i->first + L"|";
+		}
+	}
+	memcpy(pBuf, sendList.data(), BUF_SIZE);
+	SetEvent(listWriteDone);
+	ResetEvent(listWriteDone);
 }

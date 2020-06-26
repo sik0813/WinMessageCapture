@@ -9,14 +9,23 @@
 #define MSG_LEN 64
 #define WM_CHILDEND (WM_USER+1)
 #define WM_SETOPTION (WM_USER+2)
+#define WM_LISTEDITDONE (WM_USER+2)
+
+#define MSG_CALLWND 0
+#define MSG_GETMSG 1
+#define MSG_KEYBOARD 2
+#define MSG_MOUSE 3
+#define MSG_MSGFILTER 4
+#define MSG_CALLWNDRET 5
 
 typedef struct _MsgData
 {
 	WCHAR processName[MAX_PATH];
 	DWORD processID;
 	DWORD threadID;
+	int hookType;
+	HWND hwnd;
 	DWORD msgCode;
-	WCHAR msgType;
 	WPARAM wParam;
 	LPARAM lParam;
 	_MsgData()
@@ -24,10 +33,11 @@ typedef struct _MsgData
 		memset(&processName, 0, MAX_PATH);
 		processID = 0;
 		threadID = 0;
+		hookType = 0;
+		hwnd = NULL;
 		msgCode = 0;
 		wParam = NULL;
 		lParam = NULL;
-		msgType = NULL;
 	}
 }MsgData, *LPMsgData;
 

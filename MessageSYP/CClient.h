@@ -2,7 +2,7 @@
 #include <Windows.h>
 #include <string>
 
-#define MSG_LEN 64
+#define BUF_SIZE 4096
 #define PIPE_TIMEOUT 5000
 
 typedef struct _MsgData
@@ -10,8 +10,9 @@ typedef struct _MsgData
 	WCHAR processName[MAX_PATH];
 	DWORD processID;
 	DWORD threadID;
+	int hookType;
+	HWND hwnd;
 	DWORD msgCode;
-	WCHAR msgType;
 	WPARAM wParam;
 	LPARAM lParam;
 	_MsgData()
@@ -19,10 +20,11 @@ typedef struct _MsgData
 		memset(&processName, 0, MAX_PATH);
 		processID = 0;
 		threadID = 0;
+		hookType = 0;
+		hwnd = NULL;
 		msgCode = 0;
 		wParam = NULL;
 		lParam = NULL;
-		msgType = NULL;
 	}
 }MsgData, *LPMsgData;
 
@@ -42,12 +44,25 @@ private:
 
 	MsgData curSendData;
 
+	/* Shared Memory Start */
+	HANDLE readListHandle = INVALID_HANDLE_VALUE;
+	LPCWSTR sharedMemName = L"Local\\SPYSendList";
+	LPCWSTR wrDoneEvent = L"listWriteDone";
+	HANDLE listWriteDone = NULL;
+	HANDLE hMapFile = NULL;
+	LPWSTR pBuf = NULL;
+	/* Shared Memory End */
+
 public:
 	std::wstring processName = L"";
-	
+	static BOOL readListQuit;
+	static BOOL sendFlag;
+
 public:
-	void MakeMsg(WCHAR msgType, DWORD _msgCode, WPARAM _wParam, LPARAM _lParam);
+	void MakeMsg(int _nCode, WPARAM _wParam, LPARAM _lParam, int _hookType);
 	BOOL SendMsg();
+	static UINT WINAPI ReadListThread(void *arg);
+	void ReadList();
 
 private:
 	BOOL Connect();
