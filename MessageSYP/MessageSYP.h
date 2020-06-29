@@ -23,11 +23,8 @@
 
 
 #define MSG_CALLWND 0
-#define MSG_GETMSG 1
-#define MSG_KEYBOARD 2
-#define MSG_MOUSE 3
-#define MSG_MSGFILTER 4
-#define MSG_CALLWNDRET 5
+#define MSG_CALLWNDRET 1
+#define MSG_GETMSG 2
 
 
 EXPORT void StartHook(DWORD threadID = 0);
@@ -35,10 +32,6 @@ EXPORT void StopHook(void);
 LRESULT CALLBACK CallWndProc(int code, WPARAM wParam, LPARAM lParam);
 LRESULT CallWndRetProc(int code, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK GetMsgProc(int code, WPARAM wParam, LPARAM lParam);
-LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam);
-LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam);
-LRESULT CALLBACK MsgFilterProc(int nCode, WPARAM wParam, LPARAM lParam);
-
 
 std::map<std::wstring, BOOL> deniedProcessList = {
 	std::pair<std::wstring, BOOL>(L"SPYforFSS.exe", TRUE)

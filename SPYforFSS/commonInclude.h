@@ -1,6 +1,7 @@
 #pragma once
 #include <Windows.h>
 #include <windowsx.h>
+#include <cstring>
 #include <string>
 #include <vector>
 #include <map>
@@ -28,6 +29,7 @@ typedef struct _MsgData
 	DWORD msgCode;
 	WPARAM wParam;
 	LPARAM lParam;
+	HINSTANCE hInstance;
 	_MsgData()
 	{
 		memset(&processName, 0, MAX_PATH);
@@ -38,6 +40,7 @@ typedef struct _MsgData
 		msgCode = 0;
 		wParam = NULL;
 		lParam = NULL;
+		hInstance = NULL;
 	}
 }MsgData, *LPMsgData;
 

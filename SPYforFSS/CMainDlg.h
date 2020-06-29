@@ -58,11 +58,11 @@ private:
 	// Object 가지고 있을 map
 	std::map<std::wstring, std::vector<std::pair<int, CCollectDlg*>>> curCollectDlg;
 	int curChildIndex = 0;
+	LPWSTR pBuf = NULL;
 
 public:
 	static CMainDlg* procAccess;
 	static BOOL quitThread;
-	static LPWSTR pBuf;
 
 public:
 	// Pipe, Thread Pool 생성
@@ -75,6 +75,7 @@ public:
 	BOOL End();
 	
 	INT_PTR CALLBACK RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+	
 	// 다이얼로그 초기화
 	BOOL InitDialog(HWND hwnd, HWND hwndFocus, LPARAM lParam);
 	void Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify);

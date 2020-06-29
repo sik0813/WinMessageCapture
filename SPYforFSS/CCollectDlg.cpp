@@ -1,7 +1,7 @@
 #include "CCollectDlg.h"
 #include <process.h>
 
-CCollectDlg::CCollectDlg(int _objectIndex):
+CCollectDlg::CCollectDlg(int _objectIndex) :
 	objectIndex(_objectIndex)
 {
 }
@@ -23,7 +23,7 @@ BOOL CCollectDlg::Start(HWND _parentHwnd)
 	{
 		return FALSE;
 	}
-	
+
 	ownHwnd = CreateDialogParamW(NULL, MAKEINTRESOURCEW(IDD_COLLECTPAGE), NULL, CCollectDlg::RunProc, (LPARAM)this);
 	ShowWindow(ownHwnd, SW_SHOW);
 	return TRUE;
@@ -51,7 +51,7 @@ BOOL CCollectDlg::End()
 
 	WaitForSingleObject(threadHandle, INFINITE);
 	CloseHandle(threadHandle);
-	threadHandle = INVALID_HANDLE_VALUE;	
+	threadHandle = INVALID_HANDLE_VALUE;
 
 	PostMessage(parentHwnd, WM_CHILDEND, (WPARAM)objectIndex, NULL);
 	return 0;
@@ -157,7 +157,7 @@ void CCollectDlg::DisplayData()
 {
 	while (true)
 	{
-		
+
 		if (TRUE == threadQuit)
 		{
 			break;
@@ -175,20 +175,23 @@ void CCollectDlg::DisplayData()
 		}
 
 		ResetEvent(readDataEvent);
-		MsgData inputMsgData;
+		LPMsgData inputMsgDataPt;
 		if (inputMsg.size() == 0)
 		{
 			SetEvent(readDataEvent);
 			continue;
 		}
 
-		if (NULL == inputMsg.front().processName)
+		inputMsgDataPt = &inputMsg.front();
+		if (NULL == inputMsgDataPt)
 		{
 			inputMsg.pop();
 			SetEvent(readDataEvent);
 			continue;
 		}
-		inputMsgData = inputMsg.front();
+
+		MsgData inputMsgData = inputMsg.front();
+
 		inputMsg.pop();
 		SetEvent(readDataEvent);
 
@@ -198,6 +201,8 @@ void CCollectDlg::DisplayData()
 		}
 
 		HWND listHwnd = GetDlgItem(ownHwnd, IDC_COLLECTLIST);
+		//WCHAR viewMsg[1024] = { 0, };
+		//LPWSTR viewMsgPointer = viewMsg;
 		std::wstring viewMsg = L"";
 		std::wstring lineNum = std::to_wstring(countLine++);
 
@@ -317,21 +322,31 @@ void CCollectDlg::DisplayData()
 		case WM_SIZE:
 		case WM_MOVE:
 		case WM_DESTROY:
-			memset(buf, 0, 32);
-			wsprintf(buf, L"0x%08X", inputMsgData.hwnd);
-			//viewMsg += L"   hwnd : " + std::wstring(buf);
-			break;
+			if (NULL == inputMsgData.hwnd)
+			{
+				break;
+			}
 
-		default:
+			WCHAR longBuf[MAX_PATH] = { 0, };
+			GetWindowTextW(inputMsgData.hwnd, longBuf, MAX_PATH);
+			viewMsg += L"  Caption: " + std::wstring(longBuf);
+
+			memset(longBuf, 0, MAX_PATH);
+			GetClassNameW(inputMsgData.hwnd, longBuf, MAX_PATH);
+			viewMsg += L"  ClassName: " + std::wstring(longBuf);
+
+			WNDCLASSW wndClass;
+			GetClassInfoW(inputMsgData.hInstance, longBuf, &wndClass);
+			memset(buf, 0, 32);
+			wsprintf(buf, L"0x%08X", wndClass.style);
+			viewMsg += L"   style : " + std::wstring(buf);
 			break;
 		}
 
-		
 
-		
 		SendMessageW(listHwnd, LB_INSERTSTRING, (WPARAM)-1, (LPARAM)viewMsg.data());
 		LRESULT count = SendMessageW(listHwnd, LB_GETCOUNT, 0, 0);
-		SendMessageW(listHwnd, LB_SETTOPINDEX, (WPARAM)count-1, (LPARAM)0);
+		SendMessageW(listHwnd, LB_SETTOPINDEX, (WPARAM)count - 1, (LPARAM)0);
 	}
 }
 
@@ -382,7 +397,7 @@ BOOL CCollectDlg::SaveLog(HWND hwnd)
 	// UTF-8 설정(WCHAR 출력)
 	unsigned short mark = 0xFEFF;
 	WriteFile(fileHandle, &mark, sizeof(mark), &returnLen, NULL);
-	
+
 	for (UINT i = 0; i < count; i++)
 	{
 		textLen = SendMessageW(ListBoxHwnd, LB_GETTEXTLEN, (WPARAM)(i), (LPARAM)NULL);

@@ -3,7 +3,6 @@
 
 CMainDlg* CMainDlg::procAccess = 0;
 BOOL CMainDlg::quitThread = FALSE;
-LPWSTR CMainDlg::pBuf = FALSE;
 
 CMainDlg::CMainDlg()
 {
@@ -11,7 +10,7 @@ CMainDlg::CMainDlg()
 
 	SYSTEM_INFO sysinfo;
 	GetSystemInfo(&sysinfo);
-	pipeSize = sysinfo.dwNumberOfProcessors / 2;
+	pipeSize = sysinfo.dwNumberOfProcessors;
 	pipeSize = pipeSize == 0 ? 1 : pipeSize;
 	threadSize = pipeSize * 2;
 }
@@ -248,11 +247,9 @@ BOOL CMainDlg::Start(HINSTANCE _parentInstance)
 		CloseHandle(hMapFile);
 		return FALSE;
 	}
-	memset(&pBuf, 0, BUF_SIZE);
+	memset(pBuf, 0, BUF_SIZE);
 
 	DialogBoxParamW(_parentInstance, MAKEINTRESOURCEW(IDD_MAINPAGE), NULL, ::RunProcMain, NULL);//(LPARAM)this);
-	//curDlgHwnd = CreateDialogParamW(_parentInstance, MAKEINTRESOURCEW(IDD_MAINPAGE), NULL, ::RunProcMain, NULL);//(LPARAM)this);
-	//ShowWindow(curDlgHwnd, SW_SHOW);	
 	return TRUE;
 }
 
@@ -314,7 +311,6 @@ INT_PTR CALLBACK CMainDlg::RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 	return FALSE;
 }
 
-
 void CMainDlg::Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
 {
 	BOOL SuccessFuc = FALSE;
@@ -373,7 +369,7 @@ BOOL CMainDlg::RefreshList(HWND hwnd)
 	{
 		if (processlist[i] != 0)
 		{
-			WCHAR szProcessName[MAX_PATH] = { 0, };
+			WCHAR processName[MAX_PATH] = { 0, };
 			// Get a handle to the process.
 
 			HANDLE processHandle = OpenProcess(
@@ -387,15 +383,13 @@ BOOL CMainDlg::RefreshList(HWND hwnd)
 				DWORD successFunc = GetModuleFileNameEx( // GetModuleBaseNameW : 실행 파일명
 					processHandle,
 					0,
-					szProcessName,
-					sizeof(szProcessName) / sizeof(WCHAR));
+					processName,
+					sizeof(processName) / sizeof(WCHAR));
 				if (NULL != successFunc)
 				{
-					std::wstring addItem = std::wstring(wcsrchr(szProcessName, L'\\') + 1);
-					addItem += L"(PID: ";
-					addItem += std::to_wstring(processlist[i]);
-					addItem += L")";
-					ListBox_AddString(listHwnd, addItem.c_str());
+					WCHAR addItem[MAX_PATH] = { 0, };
+					wsprintf(addItem, L"%s(%d)", wcsrchr(processName, L'\\') + 1, processlist[i]);
+					ListBox_AddString(listHwnd, addItem);
 				}
 			}
 			CloseHandle(processHandle);
@@ -428,8 +422,6 @@ void CMainDlg::InsertClickProcess(HWND hwndCtl, HWND hwnd)
 
 BOOL CMainDlg::StartCollect(HWND hwnd)
 {
-	//LPWSTR currentContent = NULL;
-	//std::map<std::wstring, BOOL> runList;
 	std::vector<std::wstring> runList;
 	std::wstring currentContent;
 	HWND editHwnd = GetDlgItem(hwnd, IDC_SELECTS);
@@ -447,6 +439,11 @@ BOOL CMainDlg::StartCollect(HWND hwnd)
 			break;
 		}
 
+		for (int i = 0; i < subString.size(); i++)
+		{
+			subString[i] = towlower(subString[i]);
+		}
+		
 		runList.push_back(subString);
 		//runList[subString] = TRUE;
 
@@ -509,7 +506,7 @@ void CMainDlg::UpdateSendList()
 			sendList += i->first + L"|";
 		}
 	}
-	memcpy(pBuf, sendList.data(), BUF_SIZE);
+	memcpy(pBuf, sendList.data(), sendList.size() * sizeof(WCHAR));
 	SetEvent(listWriteDone);
 	ResetEvent(listWriteDone);
 }

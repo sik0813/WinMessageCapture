@@ -7,7 +7,7 @@
 #include "CClient.h"
 
 
-#define NUMHOOK 7
+#define NUMHOOK 3
 
 
 HINSTANCE kdllInstance = NULL;
@@ -25,7 +25,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 	{
 		return TRUE;
 	}
-	StringCchCopyW(processName, MAX_PATH, wcsrchr(processName, L'\\') + 1);	
+	StringCchCopyW(processName, MAX_PATH, wcsrchr(processName, L'\\') + 1);
 	if (NULL == processName)
 	{
 		return TRUE;
@@ -34,7 +34,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 	switch (ul_reason_for_call)
 	{
 	case DLL_PROCESS_ATTACH:
-		kdllInstance = (HINSTANCE)hModule;		
+		kdllInstance = (HINSTANCE)hModule;
 		nowClient = new CClient();
 		nowClient->Start(processName);
 		break;
@@ -43,7 +43,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 	case DLL_THREAD_DETACH:
 		break;
 	case DLL_PROCESS_DETACH:
-		//nowClient->End();
+		nowClient->End();
 		delete nowClient;
 		break;
 	}
@@ -56,9 +56,6 @@ EXPORT void StartHook(DWORD threadID)
 	hookList[MSG_CALLWND] = SetWindowsHookExW(WH_CALLWNDPROC, (HOOKPROC)CallWndProc, kdllInstance, threadID); // send
 	hookList[MSG_CALLWNDRET] = SetWindowsHookExW(WH_CALLWNDPROCRET, (HOOKPROC)CallWndRetProc, kdllInstance, threadID); // return
 	hookList[MSG_GETMSG] = SetWindowsHookExW(WH_GETMESSAGE, (HOOKPROC)GetMsgProc, kdllInstance, threadID); // post
-	//hookList[MSG_KEYBOARD] = SetWindowsHookExW(WH_KEYBOARD, (HOOKPROC)KeyboardProc, kdllInstance, threadID); // 
-	//hookList[MSG_MOUSE] = SetWindowsHookExW(WH_MOUSE, (HOOKPROC)MouseProc, kdllInstance, threadID); // 
-	//hookList[MSG_MSGFILTER] = SetWindowsHookExW(WH_MSGFILTER, (HOOKPROC)MsgFilterProc, kdllInstance, threadID); // 
 	return;
 }
 
@@ -68,9 +65,6 @@ EXPORT void StopHook(void)
 	UnhookWindowsHookEx(hookList[MSG_CALLWND]);
 	UnhookWindowsHookEx(hookList[MSG_CALLWNDRET]);
 	UnhookWindowsHookEx(hookList[MSG_GETMSG]);
-	//UnhookWindowsHookEx(hookList[MSG_KEYBOARD]);
-	//UnhookWindowsHookEx(hookList[MSG_MOUSE]);
-	//UnhookWindowsHookEx(hookList[MSG_MSGFILTER]);	
 	return;
 }
 
@@ -87,17 +81,25 @@ LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
 	{
 		return CallNextHookEx(hookList[hookIndex], nCode, wParam, lParam);
 	}
-		
+
 	if (false == nowClient->processName.empty())
 	{
 		switch (nCode)
 		{
 		case HC_ACTION:
-			if (0 != wParam)
+			if (0 == wParam)
 			{
+				// other thread
 				LPCWPSTRUCT nowMsg = (LPCWPSTRUCT)lParam;
 				nowClient->MakeMsg(nCode, wParam, lParam, hookIndex);
 				nowClient->SendMsg();
+			}
+			else
+			{
+				// current thread
+				//LPCWPSTRUCT nowMsg = (LPCWPSTRUCT)lParam;
+				//nowClient->MakeMsg(nCode, wParam, lParam, hookIndex);
+				//nowClient->SendMsg();
 			}
 			break;
 
@@ -128,15 +130,17 @@ LRESULT CallWndRetProc(int nCode, WPARAM wParam, LPARAM lParam)
 		switch (nCode)
 		{
 		case HC_ACTION:
-			if (0 != wParam)
+			if (NULL == wParam)
 			{
+				// other process
+			}
+			else
+			{
+				// current process
 				CWPRETSTRUCT *nowMsg = (CWPRETSTRUCT*)lParam;
 				nowClient->MakeMsg(nCode, wParam, lParam, hookIndex);
 				nowClient->SendMsg();
 			}
-			break;
-
-		default:
 			break;
 		}
 	}
@@ -163,137 +167,23 @@ LRESULT CALLBACK GetMsgProc(int nCode, WPARAM wParam, LPARAM lParam)
 		switch (nCode)
 		{
 		case HC_ACTION:
-			if (0 != wParam)
+			switch (wParam)
 			{
+			case PM_NOREMOVE:
+				break;
+
+			case PM_REMOVE:
 				MSG *nowMsg = (MSG*)lParam;
 				nowClient->MakeMsg(nCode, wParam, lParam, hookIndex);
 				nowClient->SendMsg();
+				break;
 			}
 			break;
-
-		default:
-			break;
 		}
 	}
 
 	return CallNextHookEx(hookList[hookIndex], nCode, wParam, lParam);
 }
-
-/****************************************************************
-WH_MOUSE hook procedure
-****************************************************************/
-LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam)
-{
-	const int hookIndex = MSG_MOUSE;
-
-	if (deniedProcessList[nowClient->processName] ||
-		NULL == nowClient ||
-		nCode < 0)
-	{
-		return CallNextHookEx(hookList[hookIndex], nCode, wParam, lParam);
-	}
-
-	if (false == nowClient->processName.empty())
-	{
-		nowClient->MakeMsg(nCode, wParam, lParam, hookIndex); // wParam: Mouse Message, 
-		nowClient->SendMsg();
-	}
-
-	return CallNextHookEx(hookList[hookIndex], nCode, wParam, lParam);
-}
-
-/****************************************************************
-WH_KEYBOARD hook procedure
-****************************************************************/
-LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
-{
-	const int hookIndex = MSG_KEYBOARD;
-	
-	if (deniedProcessList[nowClient->processName] ||
-		NULL == nowClient ||
-		nCode < 0)
-	{
-		return CallNextHookEx(hookList[hookIndex], nCode, wParam, lParam);
-	}
-
-	if (false == nowClient->processName.empty())
-	{
-		nowClient->MakeMsg(nCode, wParam, lParam, hookIndex); // wParam: Mouse Message, 
-		nowClient->SendMsg();
-	}
-
-	return CallNextHookEx(hookList[hookIndex], nCode, wParam, lParam);
-}
-
-/****************************************************************
-WH_MSGFILTER hook procedure
-****************************************************************/
-LRESULT CALLBACK MsgFilterProc(int nCode, WPARAM wParam, LPARAM lParam)
-{
-	const int hookIndex = MSG_MSGFILTER;
-	WCHAR szBuf[128];
-	WCHAR szMsg[16];
-	WCHAR szCode[32];
-	static int c = 0;
-	size_t cch;
-	HRESULT hResult;
-
-	if (nCode < 0)  // do not process message 
-		return CallNextHookEx(hookList[hookIndex], nCode, wParam, lParam);
-
-	switch (nCode)
-	{
-	case MSGF_DIALOGBOX:
-		hResult = StringCchCopy(szCode, 32 / sizeof(TCHAR), L"MSGF_DIALOGBOX");
-		if (FAILED(hResult))
-		{
-			// TODO: write error handler
-		}
-		break;
-
-	case MSGF_MENU:
-		hResult = StringCchCopy(szCode, 32 / sizeof(TCHAR), L"MSGF_MENU");
-		if (FAILED(hResult))
-		{
-			// TODO: write error handler
-		}
-		break;
-
-	case MSGF_SCROLLBAR:
-		hResult = StringCchCopy(szCode, 32 / sizeof(TCHAR), L"MSGF_SCROLLBAR");
-		if (FAILED(hResult))
-		{
-			// TODO: write error handler
-		}
-		break;
-
-	default:
-		hResult = StringCchPrintf(szCode, 128 / sizeof(TCHAR), L"Unknown: %d", nCode);
-		if (FAILED(hResult))
-		{
-			// TODO: write error handler
-		}
-		break;
-	}
-
-
-	hResult = StringCchPrintf(szBuf, 128 / sizeof(TCHAR),
-		L"MSGFILTER  nCode: %s, msg: %s, %d times    ",
-		szCode, szMsg, c++);
-	if (FAILED(hResult))
-	{
-		// TODO: write error handler
-	}
-	hResult = StringCchLength(szBuf, 128 / sizeof(TCHAR), &cch);
-	if (FAILED(hResult))
-	{
-		// TODO: write error handler
-	}
-
-	return CallNextHookEx(hookList[hookIndex], nCode, wParam, lParam);
-}
-
-
 
 BOOL CClient::readListQuit = FALSE;
 BOOL CClient::sendFlag = FALSE;
@@ -301,18 +191,28 @@ BOOL CClient::sendFlag = FALSE;
 CClient::CClient()
 {}
 
-CClient::~CClient() 
+CClient::~CClient()
 {}
 
 void CClient::Start(LPWSTR _processName)
 {
 	processName = std::wstring(_processName);
+	for (int i = 0; i < processName.size(); i++)
+	{
+		processName[i] = towlower(processName[i]);
+	}
 	/*for (int i = 0; i < processName.size(); i++)
 	{
 		processName[i] = towlower(processName[i]);
 	}*/
-	StringCchCopyW(curSendData.processName, wcslen(_processName) + 1, _processName);
+	if (TRUE == deniedProcessList[processName])
+	{
+		return;
+	}
+
+	StringCchCopyW(curSendData.processName, wcslen(_processName) + 1, processName.data());
 	curSendData.processID = GetCurrentProcessId();
+	curSendData.hInstance = (HINSTANCE)GetModuleHandleW(NULL);
 
 	hMapFile = OpenFileMapping(
 		FILE_MAP_ALL_ACCESS,   // read/write access
@@ -343,6 +243,11 @@ void CClient::Start(LPWSTR _processName)
 
 void CClient::End()
 {
+	if (TRUE == deniedProcessList[processName])
+	{
+		return;
+	}
+
 	readListQuit = TRUE;
 	UnmapViewOfFile(pBuf);
 	CloseHandle(listWriteDone);
@@ -425,7 +330,7 @@ void CClient::ReadList()
 			sendFlag = TRUE;
 		}
 
-		WaitForSingleObject(listWriteDone, 60000); // 60sec
+		WaitForSingleObject(listWriteDone, 10000); // 60sec
 	}
 }
 
@@ -465,24 +370,6 @@ void CClient::MakeMsg(int _nCode, WPARAM _wParam, LPARAM _lParam, int _hookType)
 		sendHwnd = getMsgMsg->hwnd;
 		sendwParam = getMsgMsg->wParam;
 		sendlParam = getMsgMsg->lParam;
-		break;
-
-	case MSG_KEYBOARD:
-		sendMsgCode = (DWORD)_wParam;
-		sendHwnd = NULL;
-		sendwParam = _wParam;
-		sendlParam = _lParam;
-		break;
-
-	case MSG_MOUSE:
-		mouseMsg = (LPMOUSEHOOKSTRUCT)_lParam;
-		sendMsgCode = (DWORD)_wParam;
-		sendHwnd = mouseMsg->hwnd;
-		sendwParam = _wParam;
-		sendlParam = _lParam;
-		break;
-
-	case MSG_MSGFILTER:
 		break;
 
 	default:
