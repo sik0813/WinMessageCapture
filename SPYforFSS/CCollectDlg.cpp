@@ -1,59 +1,75 @@
 #include "CCollectDlg.h"
 #include <process.h>
 
+
 CCollectDlg::CCollectDlg(int _objectIndex) :
-	objectIndex(_objectIndex)
+	m_objectIndex(_objectIndex)
 {
+	m_curSettingData.msgOptions[WM_CREATE] = true;
+	m_curSettingData.msgOptions[WM_SHOWWINDOW] = true;
+	m_curSettingData.msgOptions[WM_WINDOWPOSCHANGED] = true;
+	m_curSettingData.msgOptions[WM_STYLECHANGED] = true;
+	m_curSettingData.msgOptions[WM_NCACTIVATE] = true;
+	m_curSettingData.msgOptions[WM_SETTEXT] = true;
+	m_curSettingData.msgOptions[WM_SIZE] = true;
+	m_curSettingData.msgOptions[WM_MOVE] = true;
+	m_curSettingData.msgOptions[WM_DESTROY] = true;
 }
 
 CCollectDlg::~CCollectDlg()
 {
 }
 
-BOOL CCollectDlg::Start(HWND _parentHwnd)
+BOOL CCollectDlg::Start(HWND _parentHwnd, std::vector<std::wstring> _inputProcessName)
 {
-	parentHwnd = _parentHwnd;
-	readDataEvent = CreateEventW(NULL, TRUE, TRUE, NULL);
-	writeDataEvent = CreateEventW(NULL, TRUE, TRUE, NULL);
-	SetEvent(readDataEvent);
-	ResetEvent(writeDataEvent);
+	m_parentHwnd = _parentHwnd;
+	InitializeCriticalSection(&m_readWriteCS);
 
-	threadHandle = (HANDLE)_beginthreadex(NULL, 0, DisplayDataThread, (LPVOID)this, NULL, NULL);
-	if (INVALID_HANDLE_VALUE == threadHandle)
+	m_threadHandle = (HANDLE)_beginthreadex(NULL, 0, DisplayDataThread, (LPVOID)this, NULL, NULL);
+	if (INVALID_HANDLE_VALUE == m_threadHandle)
 	{
 		return FALSE;
 	}
 
-	ownHwnd = CreateDialogParamW(NULL, MAKEINTRESOURCEW(IDD_COLLECTPAGE), NULL, CCollectDlg::RunProc, (LPARAM)this);
-	ShowWindow(ownHwnd, SW_SHOW);
+	m_ownHwnd = CreateDialogParamW(NULL, MAKEINTRESOURCEW(IDD_COLLECTPAGE), NULL, CCollectDlg::RunProc, (LPARAM)this);
+	
+	// 캡션 추가
+	std::wstring showCaption = L"";
+	for (auto x : _inputProcessName)
+	{
+		showCaption += x + L"|";
+	}
+	showCaption.pop_back();
+	SetWindowTextW(m_ownHwnd, showCaption.data());
+
+	// 창띄우기
+	ShowWindow(m_ownHwnd, SW_SHOW);
+
 	return TRUE;
 }
 
 BOOL CCollectDlg::End()
 {
-	if (NULL != childOption)
+	if (NULL != m_childOption)
 	{
-		childOption->End(0);
-		delete childOption;
-		childOption = NULL;
+		m_childOption->End(0);
+		delete m_childOption;
+		m_childOption = NULL;
 	}
 
-	DestroyWindow(ownHwnd);
+	LeaveCriticalSection(&m_readWriteCS);
 
-	threadQuit = TRUE;
-	SetEvent(writeDataEvent);
-	SetEvent(readDataEvent);
+	DestroyWindow(m_ownHwnd);
 
-	CloseHandle(readDataEvent);
-	readDataEvent = INVALID_HANDLE_VALUE;
-	CloseHandle(writeDataEvent);
-	writeDataEvent = INVALID_HANDLE_VALUE;
+	m_threadQuit = TRUE;
+	WaitForSingleObject(m_threadHandle, INFINITE);
+	CloseHandle(m_threadHandle);
+	m_threadHandle = INVALID_HANDLE_VALUE;
 
-	WaitForSingleObject(threadHandle, INFINITE);
-	CloseHandle(threadHandle);
-	threadHandle = INVALID_HANDLE_VALUE;
+	DeleteCriticalSection(&m_readWriteCS);
+	
 
-	PostMessage(parentHwnd, WM_CHILDEND, (WPARAM)objectIndex, NULL);
+	PostMessage(m_parentHwnd, WM_CHILDEND, (WPARAM)m_objectIndex, NULL);
 	return 0;
 }
 
@@ -65,7 +81,7 @@ INT_PTR CALLBACK CCollectDlg::RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARA
 	case WM_INITDIALOG:
 		SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)lParam);
 		pointerThis = (CCollectDlg*)lParam;
-		pointerThis->ownHwnd = hwnd;
+		pointerThis->m_ownHwnd = hwnd;
 		pointerThis->InitDialog(hwnd, (HWND)(wParam), lParam);
 		break;
 
@@ -78,13 +94,13 @@ INT_PTR CALLBACK CCollectDlg::RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARA
 		break;
 
 	case WM_SETOPTION:
-		BOOL succFunc = pointerThis->childOption->GetOption(&(pointerThis->curSettingData));
-		if (TRUE == succFunc && FALSE == pointerThis->showMsgData)
+		BOOL succFunc = pointerThis->m_childOption->GetOption(&(pointerThis->m_curSettingData));
+		if (TRUE == succFunc && FALSE == pointerThis->m_showMsgData)
 		{
-			pointerThis->showMsgData = TRUE;
+			pointerThis->m_showMsgData = TRUE;
 		}
-		delete pointerThis->childOption;
-		pointerThis->childOption = NULL;
+		delete pointerThis->m_childOption;
+		pointerThis->m_childOption = NULL;
 		break;
 	}
 
@@ -94,11 +110,11 @@ INT_PTR CALLBACK CCollectDlg::RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARA
 // 다이얼로그 초기화
 BOOL CCollectDlg::InitDialog(HWND hwnd, HWND hwndFocus, LPARAM lParam)
 {
-	startAndSuspend = GetDlgItem(hwnd, IDC_STARTSUSPEND);
-	SendMessageW(startAndSuspend, WM_SETTEXT, 0, (LPARAM)L"재생");
+	m_startAndSuspend = GetDlgItem(hwnd, IDC_STARTSUSPEND);
+	SendMessageW(m_startAndSuspend, WM_SETTEXT, 0, (LPARAM)L"시작");
 
 	//Option 설정
-	//PostMessageW(hwnd, WM_COMMAND, MAKEWPARAM(IDC_OPTION, IDC_OPTION), NULL);
+	PostMessageW(hwnd, WM_COMMAND, MAKEWPARAM(IDC_OPTION, IDC_OPTION), NULL);
 	return TRUE;
 }
 
@@ -113,15 +129,15 @@ void CCollectDlg::Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
 		break;
 
 	case IDC_STARTSUSPEND:
-		if (FALSE == showMsgData)
+		if (FALSE == m_showMsgData)
 		{
-			SendMessageW(startAndSuspend, WM_SETTEXT, 0, (LPARAM)L"일시정지");
+			SendMessageW(m_startAndSuspend, WM_SETTEXT, 0, (LPARAM)L"일시정지");
 		}
 		else
 		{
-			SendMessageW(startAndSuspend, WM_SETTEXT, 0, (LPARAM)L"시작");
+			SendMessageW(m_startAndSuspend, WM_SETTEXT, 0, (LPARAM)L"시작");
 		}
-		showMsgData = !showMsgData;
+		m_showMsgData = !m_showMsgData;
 		break;
 
 	case IDC_FILEOUT:
@@ -129,23 +145,26 @@ void CCollectDlg::Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
 		break;
 
 	case IDC_OPTION:
-		if (NULL != childOption)
+		if (NULL != m_childOption)
 		{
 			break;
 		}
-		childOption = new COptionDlg();
-		childOption->Start(ownHwnd, &curSettingData);
+		m_childOption = new COptionDlg();
+		m_childOption->Start(m_ownHwnd, &m_curSettingData);
 		break;
 	}
 }
 
 void CCollectDlg::InsertData(MsgData _inputMsgData)
 {
-	WaitForSingleObject(readDataEvent, INFINITE);
-	ResetEvent(writeDataEvent);
-	inputMsg.push(_inputMsgData);
-	SetEvent(writeDataEvent);
+	if (FALSE == m_threadQuit)
+	{
+		EnterCriticalSection(&m_readWriteCS);
+		m_inputMsg.push(_inputMsgData);
+		LeaveCriticalSection(&m_readWriteCS);
+	}
 }
+
 
 UINT CCollectDlg::DisplayDataThread(void * arg)
 {
@@ -155,198 +174,191 @@ UINT CCollectDlg::DisplayDataThread(void * arg)
 
 void CCollectDlg::DisplayData()
 {
+	std::queue<MsgData> inputMsgQeuue;
 	while (true)
 	{
+		HWND listHwnd = GetDlgItem(m_ownHwnd, IDC_COLLECTLIST);
+		if (TRUE == m_threadQuit)
+		{
+			break;
+		}		
 
-		if (TRUE == threadQuit)
+		EnterCriticalSection(&m_readWriteCS);
+		std::swap(inputMsgQeuue, m_inputMsg);
+		LeaveCriticalSection(&m_readWriteCS);
+
+		if (TRUE == m_threadQuit)
 		{
 			break;
 		}
 
-		if (inputMsg.size() == 0)
+		while (!inputMsgQeuue.empty())
 		{
-			ResetEvent(writeDataEvent);
-		}
+			MsgData inputMsgData = inputMsgQeuue.front();
+			inputMsgQeuue.pop();
+			
+			if (false == m_curSettingData.msgOptions[inputMsgData.msgCode]
+				&& false == m_curSettingData.otherMsgShow)
+			{
+				continue;
+			}
 
-		WaitForSingleObject(writeDataEvent, INFINITE);
-		if (TRUE == threadQuit)
-		{
-			break;
-		}
+			if (FALSE == m_showMsgData || TRUE == m_threadQuit)
+			{
+				std::queue<MsgData> clearQueue;
+				std::swap(clearQueue, inputMsgQeuue);
+				continue;
+			}
 
-		ResetEvent(readDataEvent);
-		LPMsgData inputMsgDataPt;
-		if (inputMsg.size() == 0)
-		{
-			SetEvent(readDataEvent);
-			continue;
-		}
+			std::wstring viewMsg = L"";
+			std::wstring lineNum = std::to_wstring(m_countLine++);
 
-		inputMsgDataPt = &inputMsg.front();
-		if (NULL == inputMsgDataPt)
-		{
-			inputMsg.pop();
-			SetEvent(readDataEvent);
-			continue;
-		}
+			// Line number(8자리수) 추가
+			viewMsg += L"<";
+			for (int i = 0; i < 8 - lineNum.size(); i++)
+				viewMsg += L"0";
+			viewMsg += lineNum + L"> ";
 
-		MsgData inputMsgData = inputMsg.front();
+			// Process Name 추가
+			viewMsg += L" [" + std::wstring(inputMsgData.processName);
 
-		inputMsg.pop();
-		SetEvent(readDataEvent);
+			// Process ID 추가
+			viewMsg += L" (" + std::to_wstring(inputMsgData.processID) + L")";
 
-		if (FALSE == showMsgData || TRUE == threadQuit)
-		{
-			continue;
-		}
+			// Thread ID 추가
+			viewMsg += L"[" + std::to_wstring(inputMsgData.threadID) + L"]]";
 
-		HWND listHwnd = GetDlgItem(ownHwnd, IDC_COLLECTLIST);
-		//WCHAR viewMsg[1024] = { 0, };
-		//LPWSTR viewMsgPointer = viewMsg;
-		std::wstring viewMsg = L"";
-		std::wstring lineNum = std::to_wstring(countLine++);
+			// Message Content 추가
+			if (NULL == wmToString[inputMsgData.msgCode])
+			{
+				viewMsg += L" [unknown]";
+			}
+			else
+			{
+				viewMsg += L" [" + std::wstring(wmToString[inputMsgData.msgCode]) + L"]";
+			}
 
-		// Line number(8자리수) 추가
-		viewMsg += L"<";
-		for (int i = 0; i < 8 - lineNum.size(); i++)
-			viewMsg += L"0";
-		viewMsg += lineNum + L"> ";
+			// Message Code 추가
+			WCHAR buf[32] = { 0, };
+			wsprintf(buf, L"0x%08X", inputMsgData.msgCode);
+			viewMsg += L"(" + std::wstring(buf) + L")";
 
-		// Process Name 추가
-		viewMsg += L" [" + std::wstring(inputMsgData.processName);
+			switch (inputMsgData.hookType)
+			{
+			case MSG_CALLWND:
+				// Msg type 추가
+				viewMsg += L" S";
 
-		// Process ID 추가
-		viewMsg += L" (" + std::to_wstring(inputMsgData.processID) + L")";
+				// wParam 추가
+				memset(buf, 0, 32);
+				wsprintf(buf, L"0x%016X", inputMsgData.wParam);
+				viewMsg += L"   wParam : " + std::wstring(buf);
 
-		// Thread ID 추가
-		viewMsg += L"[" + std::to_wstring(inputMsgData.threadID) + L"]]";
+				// lParam 추가
+				memset(buf, 0, 32);
+				wsprintf(buf, L"0x%016X", inputMsgData.lParam);
+				viewMsg += L"   lParam : " + std::wstring(buf);
+				break;
 
-		// Message Content 추가
-		if (NULL == wmTranslation[inputMsgData.msgCode])
-		{
-			viewMsg += L" [unknown]";
-		}
-		else
-		{
-			viewMsg += L" [" + std::wstring(wmTranslation[inputMsgData.msgCode]) + L"]";
-		}
+			case MSG_CALLWNDRET:
+				// Msg type 추가
+				viewMsg += L" R";
 
-		// Message Code 추가
-		WCHAR buf[32] = { 0, };
-		wsprintf(buf, L"0x%08X", inputMsgData.msgCode);
-		viewMsg += L"(" + std::wstring(buf) + L")";
+				// wParam 추가
+				memset(buf, 0, 32);
+				wsprintf(buf, L"0x%016X", inputMsgData.wParam);
+				viewMsg += L"   wParam : " + std::wstring(buf);
 
-		switch (inputMsgData.hookType)
-		{
-		case MSG_CALLWND:
-			// Msg type 추가
-			viewMsg += L" S";
+				// lParam 추가
+				memset(buf, 0, 32);
+				wsprintf(buf, L"0x%016X", inputMsgData.lParam);
+				viewMsg += L"   lParam : " + std::wstring(buf);
+				break;
 
-			// wParam 추가
-			memset(buf, 0, 32);
-			wsprintf(buf, L"0x%08X", inputMsgData.wParam);
-			viewMsg += L"   wParam : " + std::wstring(buf);
+			case MSG_GETMSG:
+				// Msg type 추가
+				viewMsg += L" P";
 
-			// lParam 추가
-			memset(buf, 0, 32);
-			wsprintf(buf, L"0x%016X", inputMsgData.lParam);
-			viewMsg += L"   lParam : " + std::wstring(buf);
-			break;
+				// wParam 추가
+				memset(buf, 0, 32);
+				wsprintf(buf, L"0x%016X", inputMsgData.wParam);
+				viewMsg += L"   wParam : " + std::wstring(buf);
 
-		case MSG_CALLWNDRET:
-			// Msg type 추가
-			viewMsg += L" R";
+				// lParam 추가
+				memset(buf, 0, 32);
+				wsprintf(buf, L"0x%016X", inputMsgData.lParam);
+				viewMsg += L"   lParam : " + std::wstring(buf);
+				break;
 
-			// wParam 추가
-			memset(buf, 0, 32);
-			wsprintf(buf, L"0x%08X", inputMsgData.wParam);
-			viewMsg += L"   wParam : " + std::wstring(buf);
+			default:
+				break;
+			}
 
-			// lParam 추가
-			memset(buf, 0, 32);
-			wsprintf(buf, L"0x%016X", inputMsgData.lParam);
-			viewMsg += L"   lParam : " + std::wstring(buf);
-			break;
+			switch (inputMsgData.msgCode)
+			{
+			case WM_CREATE:
+			case WM_SHOWWINDOW:
+			case WM_WINDOWPOSCHANGED:
+			case WM_STYLECHANGED:
+			case WM_NCACTIVATE:
+			case WM_SETTEXT:
+			case WM_SIZE:
+			case WM_MOVE:
+			case WM_DESTROY:
+				if (NULL == inputMsgData.hwnd)
+				{
+					break;
+				}
 
-		case MSG_GETMSG:
-			// Msg type 추가
-			viewMsg += L" P";
+				WCHAR longBuf[MAX_PATH] = { 0, };
+				GetWindowTextW(inputMsgData.hwnd, longBuf, MAX_PATH);
+				viewMsg += L"  Caption: " + std::wstring(longBuf);
 
-			// wParam 추가
-			memset(buf, 0, 32);
-			wsprintf(buf, L"0x%08X", inputMsgData.wParam);
-			viewMsg += L"   wParam : " + std::wstring(buf);
+				memset(longBuf, 0, MAX_PATH);
+				GetClassNameW(inputMsgData.hwnd, longBuf, MAX_PATH);
+				viewMsg += L"  ClassName: " + std::wstring(longBuf);
 
-			// lParam 추가
-			memset(buf, 0, 32);
-			wsprintf(buf, L"0x%016X", inputMsgData.lParam);
-			viewMsg += L"   lParam : " + std::wstring(buf);
-			break;
+				WNDCLASSW wndClass;
+				GetClassInfoW(inputMsgData.hInstance, longBuf, &wndClass);
+				
+				MakeStyleString(&viewMsg, wndClass.style);
 
-		case MSG_KEYBOARD:
-			// wParam 추가 | virtual key code
-			memset(buf, 0, 32);
-			wsprintf(buf, L"0x%02X", inputMsgData.wParam);
-			viewMsg += L"   vKeyCode : " + std::wstring(buf);
+				memset(buf, 0, 32);
+				wsprintf(buf, L"0x%08X", wndClass.style);
+				viewMsg += L"   style : " + std::wstring(buf);
+				break;
+			}
 
-			// lParam 추가
-			memset(buf, 0, 32);
-			wsprintf(buf, L"0x%016X", inputMsgData.lParam);
-			viewMsg += L"   lParam: " + std::wstring(buf);
-			break;
-
-		case MSG_MOUSE:
-			// wParam, mouse message와 동일(생략)
-
-			// lParam 추가
-			memset(buf, 0, 32);
-			wsprintf(buf, L"x: %d, y: %d", LOWORD(inputMsgData.lParam), HIWORD(inputMsgData.lParam));
-			viewMsg += L"   x: " + std::wstring(buf);
-			break;
-
-		case MSG_MSGFILTER:
-			break;
-
-		default:
-			break;
-		}
-
-		switch (inputMsgData.msgCode)
-		{
-		case WM_CREATE:
-		case WM_SHOWWINDOW:
-		case WM_WINDOWPOSCHANGED:
-		case WM_STYLECHANGED:
-		case WM_NCACTIVATE:
-		case WM_SETTEXT:
-		case WM_SIZE:
-		case WM_MOVE:
-		case WM_DESTROY:
-			if (NULL == inputMsgData.hwnd)
+			if (TRUE == m_threadQuit)
 			{
 				break;
 			}
 
-			WCHAR longBuf[MAX_PATH] = { 0, };
-			GetWindowTextW(inputMsgData.hwnd, longBuf, MAX_PATH);
-			viewMsg += L"  Caption: " + std::wstring(longBuf);
-
-			memset(longBuf, 0, MAX_PATH);
-			GetClassNameW(inputMsgData.hwnd, longBuf, MAX_PATH);
-			viewMsg += L"  ClassName: " + std::wstring(longBuf);
-
-			WNDCLASSW wndClass;
-			GetClassInfoW(inputMsgData.hInstance, longBuf, &wndClass);
-			memset(buf, 0, 32);
-			wsprintf(buf, L"0x%08X", wndClass.style);
-			viewMsg += L"   style : " + std::wstring(buf);
-			break;
+			SendMessageW(listHwnd, LB_INSERTSTRING, (WPARAM)-1, (LPARAM)viewMsg.data());
+			LRESULT count = SendMessageW(listHwnd, LB_GETCOUNT, 0, 0);
+			SendMessageW(listHwnd, LB_SETTOPINDEX, (WPARAM)count - 1, (LPARAM)0);
 		}
+		
+	}
+}
 
+void CCollectDlg::MakeStyleString(std::wstring *_inputString, UINT _inputStyle)
+{
+	*_inputString += L"   style : ";
 
-		SendMessageW(listHwnd, LB_INSERTSTRING, (WPARAM)-1, (LPARAM)viewMsg.data());
-		LRESULT count = SendMessageW(listHwnd, LB_GETCOUNT, 0, 0);
-		SendMessageW(listHwnd, LB_SETTOPINDEX, (WPARAM)count - 1, (LPARAM)0);
+	if (WS_BORDER & _inputStyle)
+	{
+		*_inputString += L"WS_BORDER | ";
+	}
+
+	if (WS_CAPTION & _inputStyle)
+	{
+		*_inputString += L"WS_CAPTION | ";
+	}
+
+	if (WS_CHILD & _inputStyle)
+	{
+		*_inputString += L"WS_CHILD | ";
 	}
 }
 

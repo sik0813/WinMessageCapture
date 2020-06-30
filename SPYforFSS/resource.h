@@ -22,6 +22,9 @@
 #define IDC_BUTTON2                     1013
 #define IDC_ALLDESELECT                 1013
 #define IDC_CHECK1                      1015
+#define IDC_SHOWWPARAM                  1015
+#define IDC_CHECK2                      1016
+#define IDC_SHOWLPARAM                  1016
 
 // Next default values for new objects
 // 

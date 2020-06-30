@@ -39,7 +39,7 @@ public:
 	void End();
 
 private:
-	LPCWSTR pipeName = L"\\\\.\\pipe\\SPYFSS";
+	LPCWSTR m_pipeName = L"\\\\.\\pipe\\SPYFSS";
 	HANDLE pipeHandle = INVALID_HANDLE_VALUE;
 
 	HANDLE dataRecvThread = INVALID_HANDLE_VALUE;
@@ -48,11 +48,11 @@ private:
 
 	/* Shared Memory Start */
 	HANDLE readListHandle = INVALID_HANDLE_VALUE;
-	LPCWSTR sharedMemName = L"Local\\SPYSendList";
-	LPCWSTR wrDoneEvent = L"listWriteDone";
-	HANDLE listWriteDone = NULL;
-	HANDLE hMapFile = NULL;
-	LPWSTR pBuf = NULL;
+	LPCWSTR m_sharedMemName = L"Local\\SPYSendList";
+	LPCWSTR m_writeDoneEvent = L"listWriteDone";
+	HANDLE m_listWriteDone = NULL;
+	HANDLE m_hMapFile = NULL;
+	LPWSTR m_pBuf = NULL;
 	/* Shared Memory End */
 
 public:

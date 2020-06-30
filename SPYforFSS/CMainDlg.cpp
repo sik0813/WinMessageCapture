@@ -7,12 +7,10 @@ BOOL CMainDlg::quitThread = FALSE;
 CMainDlg::CMainDlg()
 {
 	procAccess = this;
-
-	SYSTEM_INFO sysinfo;
-	GetSystemInfo(&sysinfo);
-	pipeSize = sysinfo.dwNumberOfProcessors;
-	pipeSize = pipeSize == 0 ? 1 : pipeSize;
-	threadSize = pipeSize * 2;
+	for (int i = 0; i < THREAD_SIZE; i++)
+	{
+		m_threadHandles[i] = INVALID_HANDLE_VALUE;
+	}
 }
 
 CMainDlg::~CMainDlg()
@@ -27,14 +25,8 @@ static INT_PTR CALLBACK RunProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM 
 
 BOOL CMainDlg::InitTrasmission()
 {
-	hPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, threadSize);
-
-	ioKeys = new IoKey[pipeSize];
-	overLaps = new OVERLAPPED[pipeSize];
-	memset(overLaps, 0, sizeof(overLaps));
-	eventHandles = new HANDLE[pipeSize];
-	memset(eventHandles, 0, sizeof(eventHandles));
-
+	m_hPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, THREAD_SIZE);
+		
 	SECURITY_DESCRIPTOR sd;
 	memset(&sd, 0, sizeof(SECURITY_DESCRIPTOR));
 	BOOL successFunc = InitializeSecurityDescriptor(
@@ -77,42 +69,38 @@ BOOL CMainDlg::InitTrasmission()
 		}
 	}
 
-	for (int i = 0; i < pipeSize; i++)
+	m_ioKeys.ioPort = m_hPort;
+	m_ioKeys.pipeHandle = CreateNamedPipeW(m_pipeName,
+		PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
+		PIPE_WAIT | PIPE_READMODE_MESSAGE | PIPE_TYPE_MESSAGE,
+		PIPE_UNLIMITED_INSTANCES,
+		0,
+		0,
+		INFINITE,
+		TRUE == isAdmin ? &sa : NULL
+	);
+
+	// overlaped read Event Handle
+	m_eventHandle = CreateEventW(NULL, FALSE, TRUE, NULL);
+	m_overLap.hEvent = m_eventHandle;
+
+	m_ioKeys.ov = &m_overLap;
+	ConnectNamedPipe(m_ioKeys.pipeHandle, m_ioKeys.ov);
+
+	if (INVALID_HANDLE_VALUE == m_ioKeys.pipeHandle)
 	{
-		ioKeys[i].ioPort = hPort;
-		ioKeys[i].pipeHandle = CreateNamedPipeW(pipeName,
-			PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
-			PIPE_WAIT | PIPE_READMODE_MESSAGE | PIPE_TYPE_MESSAGE,
-			PIPE_UNLIMITED_INSTANCES,
-			0,
-			0,
-			INFINITE,
-			TRUE == isAdmin ? &sa : NULL
-		);
-
-		// overlaped read Event Handle
-		eventHandles[i] = CreateEventW(NULL, FALSE, TRUE, NULL);
-		overLaps[i].hEvent = eventHandles[i];
-
-		ioKeys[i].ov = &overLaps[i];
-		ConnectNamedPipe(ioKeys[i].pipeHandle, ioKeys[i].ov);
-
-		if (INVALID_HANDLE_VALUE == ioKeys[i].pipeHandle)
-		{
-			return FALSE;
-		}
-		if (NULL == CreateIoCompletionPort(ioKeys[i].pipeHandle, hPort, (ULONG_PTR)&ioKeys[i], threadSize))
-		{
-			wprintf(L"IOCP connect Error");
-			return FALSE;
-		}
+		return FALSE;
+	}
+	if (NULL == CreateIoCompletionPort(m_ioKeys.pipeHandle, m_hPort, (ULONG_PTR)&m_ioKeys, THREAD_SIZE))
+	{
+		wprintf(L"IOCP connect Error");
+		return FALSE;
 	}
 
-	threadHandles = new HANDLE[threadSize];
-	for (int i = 0; i < threadSize; i++)
+	for (int i = 0; i < THREAD_SIZE; i++)
 	{
-		threadHandles[i] = (HANDLE)_beginthreadex(NULL, 0, RecvDataThread, (void*)hPort, NULL, NULL);
-		if (INVALID_HANDLE_VALUE == threadHandles[i])
+		m_threadHandles[i] = (HANDLE)_beginthreadex(NULL, 0, RecvDataThread, (void*)m_hPort, NULL, NULL);
+		if (INVALID_HANDLE_VALUE == m_threadHandles[i])
 		{
 			return FALSE;
 		}
@@ -172,7 +160,7 @@ BOOL CMainDlg::RecvData(HANDLE _portHandle)
 				}
 				else if (WAIT_OBJECT_0 == waitReturn)
 				{
-					DIsplay(nowKey->msgDataBuf);
+					Display(nowKey->msgDataBuf);
 				}
 			}
 			else
@@ -182,7 +170,7 @@ BOOL CMainDlg::RecvData(HANDLE _portHandle)
 		}
 		else
 		{
-			DIsplay(nowKey->msgDataBuf);
+			Display(nowKey->msgDataBuf);
 		}
 
 		FlushFileBuffers(nowKey->pipeHandle);
@@ -194,25 +182,25 @@ BOOL CMainDlg::RecvData(HANDLE _portHandle)
 }
 
 
-void CMainDlg::DIsplay(MsgData &_inputMsgData)
+void CMainDlg::Display(MsgData &_inputMsgData)
 {
 	MsgData inputMsgData = _inputMsgData;
 	std::wstring recvProcessName = std::wstring(inputMsgData.processName);
 
-	WaitForSingleObject(deleteDlg, INFINITE);
-	for (int i = 0; i < curCollectDlg[recvProcessName].size(); i++)
+	EnterCriticalSection(&m_deleteDlg);
+	for (int i = 0; i < m_curCollectDlg[recvProcessName].size(); i++)
 	{
-		(curCollectDlg[recvProcessName][i].second)->InsertData(inputMsgData);
+		(m_curCollectDlg[recvProcessName][i].second)->InsertData(inputMsgData);
 	}
+	LeaveCriticalSection(&m_deleteDlg);
 	//SetEvent(readEndEvent);
 }
 
 
 BOOL CMainDlg::Start(HINSTANCE _parentInstance)
 {
-	parentInstance = _parentInstance;
-	deleteDlg = CreateEventW(NULL, TRUE, TRUE, NULL);
-	SetEvent(deleteDlg);
+	m_parentInstance = _parentInstance;
+	InitializeCriticalSection(&m_deleteDlg);
 
 	BOOL succFunc = InitTrasmission();
 	if (FALSE == succFunc)
@@ -220,69 +208,68 @@ BOOL CMainDlg::Start(HINSTANCE _parentInstance)
 		MessageBoxW((HWND)_parentInstance, L"PIPE make Error", L"ERROR", MB_OK);
 	}
 
-	listWriteDone = CreateEventW(NULL, TRUE, TRUE, wrDoneEvent);
-	ResetEvent(listWriteDone);
+	m_listWriteDone = CreateEventW(NULL, TRUE, TRUE, m_writeDoneEvent);
+	ResetEvent(m_listWriteDone);
 
-	hMapFile = CreateFileMappingW(
+	m_hMapFile = CreateFileMappingW(
 		INVALID_HANDLE_VALUE,    // use paging file
 		NULL,                    // default security
 		PAGE_READWRITE,          // read/write access
 		0,                       // maximum object size (high-order DWORD)
 		BUF_SIZE,                // maximum object size (low-order DWORD)
-		sharedMemName);                 // name of mapping object
-	if (hMapFile == NULL)
+		m_sharedMemName);                 // name of mapping object
+	if (m_hMapFile == NULL)
 	{
 		wprintf(L"Could not create file mapping object (%d).\n", GetLastError());
 		return FALSE;
 	}
 
-	pBuf = (LPWSTR)MapViewOfFile(hMapFile,   // handle to map object
+	m_pBuf = (LPWSTR)MapViewOfFile(m_hMapFile,   // handle to map object
 		FILE_MAP_ALL_ACCESS, // read/write permission
 		0,
 		0,
 		BUF_SIZE);
-	if (pBuf == NULL)
+	if (m_pBuf == NULL)
 	{
 		wprintf(L"Could not map view of file (%d).\n", GetLastError());
-		CloseHandle(hMapFile);
+		CloseHandle(m_hMapFile);
 		return FALSE;
 	}
-	memset(pBuf, 0, BUF_SIZE);
+	memset(m_pBuf, 0, BUF_SIZE);
 
-	DialogBoxParamW(_parentInstance, MAKEINTRESOURCEW(IDD_MAINPAGE), NULL, ::RunProcMain, NULL);//(LPARAM)this);
 	return TRUE;
+}
+
+BOOL CMainDlg::Show()
+{
+	DialogBoxParamW(m_parentInstance, MAKEINTRESOURCEW(IDD_MAINPAGE), NULL, ::RunProcMain, NULL);//(LPARAM)this);
+	return 0;
 }
 
 BOOL CMainDlg::End()
 {
-	UnmapViewOfFile(pBuf);
+	UnmapViewOfFile(m_pBuf);
 
-	SetEvent(listWriteDone);
-	CloseHandle(listWriteDone);
-	CloseHandle(hMapFile);
+	SetEvent(m_listWriteDone);
+	CloseHandle(m_listWriteDone);
+	CloseHandle(m_hMapFile);
 
-	CloseHandle(deleteDlg);
-	quitThread = TRUE;
+	quitThread = TRUE;	
 
-	for (int i = 0; i < pipeSize; i++)
+	CloseHandle(m_ioKeys.pipeHandle);
+	CloseHandle(m_ioKeys.ov->hEvent);
+
+	CloseHandle(m_hPort);
+
+	WaitForMultipleObjects(THREAD_SIZE, m_threadHandles, TRUE, INFINITE);
+
+	for (int i = 0; i < THREAD_SIZE; i++)
 	{
-		CloseHandle(ioKeys[i].pipeHandle);
-		CloseHandle(ioKeys[i].ov->hEvent);
+		CloseHandle(m_threadHandles[i]);
 	}
 
-	CloseHandle(hPort);
+	DeleteCriticalSection(&m_deleteDlg);
 
-	WaitForMultipleObjects(threadSize, threadHandles, TRUE, INFINITE);
-
-	for (int i = 0; i < threadSize; i++)
-	{
-		CloseHandle(threadHandles[i]);
-	}
-
-	delete[] overLaps;
-	delete[] eventHandles;
-	delete[] ioKeys;
-	delete[] threadHandles;
 	return 0;
 }
 
@@ -342,10 +329,10 @@ void CMainDlg::Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
 // 다이얼로그 초기화
 BOOL CMainDlg::InitDialog(HWND hwnd, HWND hwndFocus, LPARAM lParam)
 {
-	HBITMAP hBitmap = LoadBitmapW(parentInstance, MAKEINTRESOURCE(IDB_REFRESH));
+	HBITMAP hBitmap = LoadBitmapW(m_parentInstance, MAKEINTRESOURCE(IDB_REFRESH));
 	HWND hDlg = GetDlgItem(hwnd, IDC_REFRESH);
 	SendMessageW(hDlg, BM_SETIMAGE, 0, (LPARAM)hBitmap);
-	ownHwnd = hwnd;
+	m_ownHwnd = hwnd;
 	PostMessageW(hwnd, WM_COMMAND, MAKEWPARAM(IDC_REFRESH, IDC_REFRESH), NULL);
 	return TRUE;
 }
@@ -455,17 +442,17 @@ BOOL CMainDlg::StartCollect(HWND hwnd)
 
 	if (0 == runList.size()) return 0;
 
-	CCollectDlg* newCCollectDlg = new CCollectDlg(curChildIndex);
+	CCollectDlg* newCCollectDlg = new CCollectDlg(m_curChildIndex);
 
 	for (auto x : runList)
 	{
-		curCollectDlg[x].push_back(std::pair<int, CCollectDlg*>(curChildIndex, newCCollectDlg));
+		m_curCollectDlg[x].push_back(std::pair<int, CCollectDlg*>(m_curChildIndex, newCCollectDlg));
 	}
 
-	newCCollectDlg->Start(hwnd);
-	curChildIndex++;
+	newCCollectDlg->Start(hwnd, runList);
+	m_curChildIndex++;
 
-	PostMessageW(ownHwnd, WM_LISTEDITDONE, NULL, NULL);
+	PostMessageW(m_ownHwnd, WM_LISTEDITDONE, NULL, NULL);
 
 	return 0;
 }
@@ -473,8 +460,9 @@ BOOL CMainDlg::StartCollect(HWND hwnd)
 BOOL CMainDlg::EndCollect(int eraseIndex)
 {
 	BOOL classDeleteDone = FALSE;
-	ResetEvent(deleteDlg);
-	for (auto i = curCollectDlg.begin(); i != curCollectDlg.end(); i++)
+
+	EnterCriticalSection(&m_deleteDlg);
+	for (auto i = m_curCollectDlg.begin(); i != m_curCollectDlg.end(); i++)
 	{
 		size_t nextLoopSize = i->second.size();
 		for (int j = 0; j < nextLoopSize; j++)
@@ -491,22 +479,23 @@ BOOL CMainDlg::EndCollect(int eraseIndex)
 			}
 		}
 	}
-	SetEvent(deleteDlg);
-	PostMessageW(ownHwnd, WM_LISTEDITDONE, NULL, NULL);
+	LeaveCriticalSection(&m_deleteDlg);
+
+	PostMessageW(m_ownHwnd, WM_LISTEDITDONE, NULL, NULL);
 	return TRUE;
 }
 
 void CMainDlg::UpdateSendList()
 {
 	std::wstring sendList = L"";
-	for (auto i = curCollectDlg.begin(); i != curCollectDlg.end(); i++)
+	for (auto i = m_curCollectDlg.begin(); i != m_curCollectDlg.end(); i++)
 	{
 		if (0 < i->second.size()) // 0 보다 큰 항목에 대하여 list 구성
 		{
 			sendList += i->first + L"|";
 		}
 	}
-	memcpy(pBuf, sendList.data(), sendList.size() * sizeof(WCHAR));
-	SetEvent(listWriteDone);
-	ResetEvent(listWriteDone);
+	memcpy(m_pBuf, sendList.data(), sendList.size() * sizeof(WCHAR));
+	SetEvent(m_listWriteDone);
+	ResetEvent(m_listWriteDone);
 }

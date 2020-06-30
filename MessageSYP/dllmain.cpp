@@ -20,20 +20,20 @@ LPCWSTR deniedProcessName = L"SPYforFSS.exe";
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
 {
 	WCHAR processName[MAX_PATH] = { 0, };
-	GetModuleFileName(NULL, processName, sizeof(processName) / sizeof(WCHAR));
-	if (NULL == processName)
-	{
-		return TRUE;
-	}
-	StringCchCopyW(processName, MAX_PATH, wcsrchr(processName, L'\\') + 1);
-	if (NULL == processName)
-	{
-		return TRUE;
-	}
-
 	switch (ul_reason_for_call)
 	{
 	case DLL_PROCESS_ATTACH:
+		
+		GetModuleFileName(NULL, processName, sizeof(processName) / sizeof(WCHAR));
+		if (NULL == processName)
+		{
+			return TRUE;
+		}
+		StringCchCopyW(processName, MAX_PATH, wcsrchr(processName, L'\\') + 1);
+		if (NULL == processName)
+		{
+			return TRUE;
+		}
 		kdllInstance = (HINSTANCE)hModule;
 		nowClient = new CClient();
 		nowClient->Start(processName);
@@ -214,29 +214,29 @@ void CClient::Start(LPWSTR _processName)
 	curSendData.processID = GetCurrentProcessId();
 	curSendData.hInstance = (HINSTANCE)GetModuleHandleW(NULL);
 
-	hMapFile = OpenFileMapping(
+	m_hMapFile = OpenFileMapping(
 		FILE_MAP_ALL_ACCESS,   // read/write access
 		FALSE,                 // do not inherit the name
-		sharedMemName);               // name of mapping object
-	if (hMapFile == NULL)
+		m_sharedMemName);               // name of mapping object
+	if (m_hMapFile == NULL)
 	{
 		wprintf(L"Could not create file mapping object (%d).\n", GetLastError());
 		return;
 	}
 
-	pBuf = (LPWSTR)MapViewOfFile(hMapFile, // handle to map object
+	m_pBuf = (LPWSTR)MapViewOfFile(m_hMapFile, // handle to map object
 		FILE_MAP_ALL_ACCESS,  // read/write permission
 		0,
 		0,
 		BUF_SIZE);
-	if (pBuf == NULL)
+	if (m_pBuf == NULL)
 	{
 		wprintf(L"Could not map view of file (%d).\n", GetLastError());
-		CloseHandle(hMapFile);
+		CloseHandle(m_hMapFile);
 		return;
 	}
 
-	listWriteDone = CreateEventW(NULL, TRUE, TRUE, wrDoneEvent);
+	m_listWriteDone = CreateEventW(NULL, TRUE, TRUE, m_writeDoneEvent);
 
 	readListHandle = (HANDLE)_beginthreadex(NULL, 0, ReadListThread, (LPVOID)this, 0, NULL);
 }
@@ -249,17 +249,24 @@ void CClient::End()
 	}
 
 	readListQuit = TRUE;
-	UnmapViewOfFile(pBuf);
-	CloseHandle(listWriteDone);
-	CloseHandle(hMapFile);
-	WaitForSingleObject(readListHandle, 10000);
+	UnmapViewOfFile(m_pBuf);
+	CloseHandle(m_listWriteDone);
+	CloseHandle(m_hMapFile);
+	
+	DWORD retFunc = WaitForSingleObject(readListHandle, 10000);
+	if (WAIT_TIMEOUT == retFunc)
+	{
+		TerminateThread(readListHandle, 0);
+	}
+
+	readListHandle = INVALID_HANDLE_VALUE;
 	CloseHandle(readListHandle);
 }
 
 BOOL CClient::Connect()
 {
 	pipeHandle = CreateFileW(
-		pipeName,   // pipe name 
+		m_pipeName,   // pipe name 
 		GENERIC_READ | GENERIC_WRITE, // read and write access 
 		0,              // no sharing 
 		NULL,           // default security attributes
@@ -276,7 +283,7 @@ BOOL CClient::Connect()
 		}
 
 		// 5초간 파이프 핸들 대기
-		if (!WaitNamedPipe(pipeName, PIPE_TIMEOUT))
+		if (!WaitNamedPipe(m_pipeName, PIPE_TIMEOUT))
 		{
 			printf("Could not open pipe: 5 second wait timed out.");
 			return FALSE;
@@ -319,7 +326,7 @@ void CClient::ReadList()
 			break;
 		}
 
-		std::wstring nowData(pBuf);
+		std::wstring nowData(m_pBuf);
 		size_t subLocation = nowData.find(processName);
 		if (std::wstring::npos == subLocation)
 		{
@@ -330,7 +337,7 @@ void CClient::ReadList()
 			sendFlag = TRUE;
 		}
 
-		WaitForSingleObject(listWriteDone, 10000); // 60sec
+		WaitForSingleObject(m_listWriteDone, 10000); // 60sec
 	}
 }
 
@@ -416,7 +423,7 @@ BOOL CClient::SendMsg()
 		DWORD lastError = GetLastError();
 		if (ERROR_IO_PENDING == lastError)
 		{
-			lastError = WaitForSingleObject(ov.hEvent, 2000);
+			lastError = WaitForSingleObject(ov.hEvent, 5000);
 			if (WAIT_OBJECT_0 != lastError)
 			{
 				wprintf(L"WriteFile to pipe failed. GLE=%d\n", GetLastError());

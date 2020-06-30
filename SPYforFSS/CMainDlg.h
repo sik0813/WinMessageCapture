@@ -4,9 +4,11 @@
 #include <process.h>
 #include <Psapi.h>
 
+#define THREAD_SIZE 2
 #define BUF_SIZE 4096
 #define PIPE_TIMEOUT 5000
 #define GETIOCP_TIMEOUT 5000
+
 
 //IOCP completion key
 typedef struct _Iokey {
@@ -31,34 +33,32 @@ public:
 	~CMainDlg();
 
 private:
-	HINSTANCE parentInstance = NULL;
-	HWND ownHwnd = NULL;
-	HWND curDlgHwnd = NULL;
-	DWORD counter = 0;
+	HINSTANCE m_parentInstance = NULL;
+	HWND m_ownHwnd = NULL;
+	HWND m_curDlgHwnd = NULL;
+	DWORD m_counter = 0;
 
-	LPCWSTR pipeName = L"\\\\.\\pipe\\SPYFSS";
+	LPCWSTR m_pipeName = L"\\\\.\\pipe\\SPYFSS";
 	
 	/* Shared Memory Start */
-	LPCWSTR sharedMemName = L"Local\\SPYSendList";
-	LPCWSTR wrDoneEvent = L"listWriteDone";
-	HANDLE listWriteDone = NULL;
-	HANDLE hMapFile = NULL;
+	LPCWSTR m_sharedMemName = L"Local\\SPYSendList";
+	LPCWSTR m_writeDoneEvent = L"listWriteDone";
+	HANDLE m_listWriteDone = NULL;
+	HANDLE m_hMapFile = NULL;
 	/* Shared Memory End */
 
-	IoKey *ioKeys = NULL;
-	HANDLE hPort = NULL;
-	OVERLAPPED *overLaps = NULL;
-	HANDLE *eventHandles = NULL;
-	HANDLE *threadHandles = NULL;
-	HANDLE deleteDlg = NULL; // CCollectDlg 객체가 사라질 때 값 동기화
+	IoKey m_ioKeys;
+	HANDLE m_hPort = NULL;
+	OVERLAPPED m_overLap;
+	HANDLE m_eventHandle = NULL;
+	HANDLE m_threadHandles[THREAD_SIZE];
+	CRITICAL_SECTION m_deleteDlg; // CCollectDlg 객체가 사라질 때 값 동기화
 
-	int pipeSize = 0;
-	int threadSize = 0;
 
 	// Object 가지고 있을 map
-	std::map<std::wstring, std::vector<std::pair<int, CCollectDlg*>>> curCollectDlg;
-	int curChildIndex = 0;
-	LPWSTR pBuf = NULL;
+	std::map<std::wstring, std::vector<std::pair<int, CCollectDlg*>>> m_curCollectDlg;
+	int m_curChildIndex = 0;
+	LPWSTR m_pBuf = NULL;
 
 public:
 	static CMainDlg* procAccess;
@@ -69,9 +69,10 @@ public:
 	BOOL InitTrasmission();
 	static UINT WINAPI RecvDataThread(void *arg);
 	BOOL RecvData(HANDLE portHandle);
-	void DIsplay(MsgData &msgData);
+	void Display(MsgData &msgData);
 
-	BOOL Start(HINSTANCE _parentInstance);	
+	BOOL Start(HINSTANCE _parentInstance);
+	BOOL Show();
 	BOOL End();
 	
 	INT_PTR CALLBACK RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);

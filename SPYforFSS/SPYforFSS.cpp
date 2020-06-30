@@ -6,10 +6,11 @@
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nShowCmd)
 {
 	CMainDlg mainDlg;
+	BOOL succFunc = mainDlg.Start(hInstance);
 	StartHook();
-	mainDlg.Start(hInstance);
-	mainDlg.End();
+	mainDlg.Show();
 	StopHook();
+	mainDlg.End();
 
 	return 0;
 }

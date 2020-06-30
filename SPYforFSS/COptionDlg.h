@@ -1,6 +1,8 @@
 #pragma once
 #include "commonInclude.h"
 
+#define WMNUMBER(X) \X
+
 class COptionDlg
 {
 public:
@@ -8,16 +10,21 @@ public:
 	~COptionDlg();
 
 private:
-	HWND parentHwnd = NULL;
-	HWND ownHwnd = NULL;
+	HWND m_parentHwnd = NULL;
+	HWND m_ownHwnd = NULL;
 
-	BOOL changeOption = FALSE;
+	int m_optionListIndex = 0;
+	BOOL m_changeOption = FALSE;
+
+	HWND m_msgListHwnd = NULL;
+	HWND m_wParamCheck = NULL;
+	HWND m_lParamCheck = NULL;
 	
-	SettingData changeSettingData;
+	SettingData m_changeSettingData;
 
 public:
 	BOOL Start(HWND _parentHwnd, LPSettingData _inputSetting);
-	BOOL End(int quitCase = 1);
+	BOOL End(int quitCase = 1); // 1: 설정, 2: 취소
 
 	static INT_PTR CALLBACK RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
