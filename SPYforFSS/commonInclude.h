@@ -30,6 +30,7 @@ typedef struct _MsgData
 	WPARAM wParam;
 	LPARAM lParam;
 	HINSTANCE hInstance;
+	WCHAR otherData[MAX_PATH];
 	_MsgData()
 	{
 		memset(&processName, 0, MAX_PATH);
@@ -41,6 +42,7 @@ typedef struct _MsgData
 		wParam = NULL;
 		lParam = NULL;
 		hInstance = NULL;
+		memset(&otherData, 0, MAX_PATH);
 	}
 }MsgData, *LPMsgData;
 

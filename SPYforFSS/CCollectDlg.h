@@ -3,6 +3,8 @@
 #include "commonInclude.h"
 #include "COptionDlg.h"
 #include <queue>
+#include <CommCtrl.h>
+#pragma comment( lib, "comctl32" )  
 
 class CCollectDlg
 {
@@ -15,20 +17,24 @@ private:
 	HWND m_parentHwnd = NULL;
 
 	HWND m_ownHwnd = NULL;
-	UINT m_countLine = 0;
 	BOOL m_showMsgData = FALSE; // 시작(TRUE)/일시정지(FALSE)
 	HWND m_startAndSuspend;
 
+	HANDLE m_queueNotEmpty = NULL;
 	std::queue<MsgData> m_inputMsg;
 	HANDLE m_threadHandle = INVALID_HANDLE_VALUE;
 	CRITICAL_SECTION m_readWriteCS;
 	BOOL m_threadQuit = FALSE;
 
+	HWND m_collectListHwnd = NULL;
+	LVCOLUMNW m_lvCol;
+	LVITEMW m_lvItem;
+	ULONGLONG m_listRowIndex = 0;
+
 	HWND m_optionHwnd = NULL;
 
 	COptionDlg *m_childOption = NULL;
 	SettingData m_curSettingData;
-
 
 public:
 	BOOL Start(HWND _parentHwnd, std::vector<std::wstring> _inputProcessName);
@@ -45,7 +51,7 @@ public:
 	// queue의 데이터를 기반으로 출력
 	static UINT WINAPI DisplayDataThread(void *arg);
 	void DisplayData();
-	void MakeStyleString(std::wstring *_inputString, UINT _inputStyle);
+	void AddStyleString(std::wstring *_inputString, UINT _inputStyle);
 
 	// 현재 ListBox 데이터 파일로 저장
 	BOOL SaveLog(HWND hwnd);

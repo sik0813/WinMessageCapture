@@ -248,9 +248,12 @@ BOOL CMainDlg::Show()
 
 BOOL CMainDlg::End()
 {
-	UnmapViewOfFile(m_pBuf);
-
+	WCHAR endMsg[4];
+	memset(endMsg, 0xF, 8);
+	memcpy(m_pBuf, endMsg, 8);
 	SetEvent(m_listWriteDone);
+
+	UnmapViewOfFile(m_pBuf);
 	CloseHandle(m_listWriteDone);
 	CloseHandle(m_hMapFile);
 

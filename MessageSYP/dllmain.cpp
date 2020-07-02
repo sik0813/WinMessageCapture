@@ -321,7 +321,9 @@ void CClient::ReadList()
 {
 	while (true)
 	{
-		if (TRUE == readListQuit)
+		if (TRUE == readListQuit
+			|| (m_pBuf[0] == 0xFF && m_pBuf[1] == 0xFF
+				&& m_pBuf[2] == 0xFF && m_pBuf[3] == 0xFF))
 		{
 			break;
 		}
@@ -337,7 +339,7 @@ void CClient::ReadList()
 			sendFlag = TRUE;
 		}
 
-		WaitForSingleObject(m_listWriteDone, 10000); // 60sec
+		WaitForSingleObject(m_listWriteDone, INFINITE); // 60sec
 	}
 }
 
@@ -382,6 +384,45 @@ void CClient::MakeMsg(int _nCode, WPARAM _wParam, LPARAM _lParam, int _hookType)
 	default:
 		break;
 	}
+
+	LPCREATESTRUCTW tmpCSpt = NULL;
+	LPWINDOWPOS tmpWPpt = NULL;
+	LPSTYLESTRUCT tmpSSpt = NULL;
+
+	switch (sendMsgCode)
+	{
+	case WM_CREATE:
+		tmpCSpt = (LPCREATESTRUCTW)sendlParam;
+		memset(curSendData.otherData, 0, MAX_PATH);
+		wsprintf(curSendData.otherData, L"x:%d, y:%d, cx:%d, cy:%d",
+			tmpCSpt->x, tmpCSpt->y, tmpCSpt->cx, tmpCSpt->cy);
+		break;
+
+	case WM_WINDOWPOSCHANGED:
+		tmpWPpt = (LPWINDOWPOS)sendlParam;
+		memset(curSendData.otherData, 0, MAX_PATH);
+		wsprintf(curSendData.otherData, L"x:%d, y:%d, cx:%d, cy:%d, flags:%d",
+			tmpWPpt->x, tmpWPpt->y, tmpWPpt->cx, tmpWPpt->cy, tmpWPpt->flags);
+		break;
+
+	case WM_STYLECHANGED:
+		tmpSSpt = (LPSTYLESTRUCT)sendlParam;
+		memset(curSendData.otherData, 0, MAX_PATH);
+		wsprintf(curSendData.otherData, L"old:%d,new:%d",
+			tmpSSpt->styleOld, tmpSSpt->styleNew);
+		break;
+
+	case WM_SETTEXT:
+		memset(curSendData.otherData, 0, MAX_PATH);
+		wsprintf(curSendData.otherData, L"%s",
+			(LPWSTR)sendlParam);
+		break;
+		
+	default:
+		memset(curSendData.otherData, 0, MAX_PATH);
+		break;
+	}
+
 	curSendData.hookType = _hookType;
 	curSendData.msgCode = sendMsgCode;
 	curSendData.hwnd = sendHwnd;
@@ -423,7 +464,7 @@ BOOL CClient::SendMsg()
 		DWORD lastError = GetLastError();
 		if (ERROR_IO_PENDING == lastError)
 		{
-			lastError = WaitForSingleObject(ov.hEvent, 5000);
+			lastError = WaitForSingleObject(ov.hEvent, 10000);
 			if (WAIT_OBJECT_0 != lastError)
 			{
 				wprintf(L"WriteFile to pipe failed. GLE=%d\n", GetLastError());
