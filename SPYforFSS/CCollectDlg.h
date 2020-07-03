@@ -6,6 +6,45 @@
 #include <CommCtrl.h>
 #pragma comment( lib, "comctl32" )  
 
+enum class colIndex {
+	index, pName, pID, tID, msgContent, msgCode, msgType,
+	wParam, lParam, caption, className, style, detail
+};
+
+typedef struct _SaveData
+{
+	std::wstring index;
+	std::wstring pName;
+	std::wstring pID;
+	std::wstring tID;
+	std::wstring msgCode;
+	std::wstring msgContent;
+	std::wstring msgType;
+	std::wstring wParam;
+	std::wstring lParam;
+	std::wstring caption;
+	std::wstring className;
+	std::wstring style;
+	std::wstring detail;
+	_SaveData()
+	{
+		index = L"";
+		pName = L"";
+		pID = L"";
+		tID = L"";
+		msgCode = L"";
+		msgContent = L"";
+		msgType = L"";
+		wParam = L"";
+		lParam = L"";
+		caption = L"";
+		className = L"";
+		style = L"";
+		detail = L"";
+	}
+}SaveData, *LPSaveData;
+
+
 class CCollectDlg
 {
 public:
@@ -30,6 +69,7 @@ private:
 	LVCOLUMNW m_lvCol;
 	LVITEMW m_lvItem;
 	ULONGLONG m_listRowIndex = 0;
+	std::vector<SaveData> saveDataList;
 
 	HWND m_optionHwnd = NULL;
 
@@ -51,7 +91,7 @@ public:
 	// queue의 데이터를 기반으로 출력
 	static UINT WINAPI DisplayDataThread(void *arg);
 	void DisplayData();
-	void AddStyleString(std::wstring *_inputString, UINT _inputStyle);
+	void AddStyleString(std::wstring *_inputString, UINT _inputStyle, int _type = 1);
 
 	// 현재 ListBox 데이터 파일로 저장
 	BOOL SaveLog(HWND hwnd);

@@ -7,7 +7,7 @@
 
 typedef struct _MsgData
 {
-	WCHAR processName[MAX_PATH];
+	WCHAR m_processName[MAX_PATH];
 	DWORD processID;
 	DWORD threadID;
 	int hookType;
@@ -19,7 +19,7 @@ typedef struct _MsgData
 	WCHAR otherData[MAX_PATH];
 	_MsgData()
 	{
-		memset(&processName, 0, MAX_PATH);
+		memset(&m_processName, 0, MAX_PATH);
 		processID = 0;
 		threadID = 0;
 		hookType = 0;
@@ -42,14 +42,12 @@ public:
 
 private:
 	LPCWSTR m_pipeName = L"\\\\.\\pipe\\SPYFSS";
-	HANDLE pipeHandle = INVALID_HANDLE_VALUE;
+	HANDLE m_pipeHandle = INVALID_HANDLE_VALUE;
 
-	HANDLE dataRecvThread = INVALID_HANDLE_VALUE;
-
-	MsgData curSendData;
+	MsgData m_curSendData;
 
 	/* Shared Memory Start */
-	HANDLE readListHandle = INVALID_HANDLE_VALUE;
+	HANDLE m_readListHandle = INVALID_HANDLE_VALUE;
 	LPCWSTR m_sharedMemName = L"Local\\SPYSendList";
 	LPCWSTR m_writeDoneEvent = L"listWriteDone";
 	HANDLE m_listWriteDone = NULL;
@@ -58,9 +56,9 @@ private:
 	/* Shared Memory End */
 
 public:
-	std::wstring processName = L"";
-	static BOOL readListQuit;
-	static BOOL sendFlag;
+	std::wstring m_processName = L"";
+	static BOOL m_readListQuit;
+	static BOOL m_sendFlag;
 
 public:
 	void MakeMsg(int _nCode, WPARAM _wParam, LPARAM _lParam, int _hookType);

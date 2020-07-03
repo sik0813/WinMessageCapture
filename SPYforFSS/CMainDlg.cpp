@@ -359,7 +359,7 @@ BOOL CMainDlg::RefreshList(HWND hwnd)
 	{
 		if (processlist[i] != 0)
 		{
-			WCHAR processName[MAX_PATH] = { 0, };
+			WCHAR m_processName[MAX_PATH] = { 0, };
 			// Get a handle to the process.
 
 			HANDLE processHandle = OpenProcess(
@@ -373,12 +373,12 @@ BOOL CMainDlg::RefreshList(HWND hwnd)
 				DWORD successFunc = GetModuleFileNameEx( // GetModuleBaseNameW : 실행 파일명
 					processHandle,
 					0,
-					processName,
-					sizeof(processName) / sizeof(WCHAR));
+					m_processName,
+					sizeof(m_processName) / sizeof(WCHAR));
 				if (NULL != successFunc)
 				{
 					WCHAR addItem[MAX_PATH] = { 0, };
-					wsprintf(addItem, L"%s(%d)", wcsrchr(processName, L'\\') + 1, processlist[i]);
+					wsprintf(addItem, L"%s(%d)", wcsrchr(m_processName, L'\\') + 1, processlist[i]);
 					ListBox_AddString(listHwnd, addItem);
 				}
 			}

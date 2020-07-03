@@ -19,24 +19,24 @@ LPCWSTR deniedProcessName = L"SPYforFSS.exe";
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
 {
-	WCHAR processName[MAX_PATH] = { 0, };
+	WCHAR m_processName[MAX_PATH] = { 0, };
 	switch (ul_reason_for_call)
 	{
 	case DLL_PROCESS_ATTACH:
 		
-		GetModuleFileName(NULL, processName, sizeof(processName) / sizeof(WCHAR));
-		if (NULL == processName)
+		GetModuleFileName(NULL, m_processName, sizeof(m_processName) / sizeof(WCHAR));
+		if (NULL == m_processName)
 		{
 			return TRUE;
 		}
-		StringCchCopyW(processName, MAX_PATH, wcsrchr(processName, L'\\') + 1);
-		if (NULL == processName)
+		StringCchCopyW(m_processName, MAX_PATH, wcsrchr(m_processName, L'\\') + 1);
+		if (NULL == m_processName)
 		{
 			return TRUE;
 		}
 		kdllInstance = (HINSTANCE)hModule;
 		nowClient = new CClient();
-		nowClient->Start(processName);
+		nowClient->Start(m_processName);
 		break;
 
 	case DLL_THREAD_ATTACH:
@@ -75,14 +75,14 @@ LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
 	const int hookIndex = MSG_CALLWND;
 
-	if (deniedProcessList[nowClient->processName] ||
+	if (deniedProcessList[nowClient->m_processName] ||
 		NULL == nowClient ||
 		nCode < 0)
 	{
 		return CallNextHookEx(hookList[hookIndex], nCode, wParam, lParam);
 	}
 
-	if (false == nowClient->processName.empty())
+	if (false == nowClient->m_processName.empty())
 	{
 		switch (nCode)
 		{
@@ -118,14 +118,14 @@ LRESULT CallWndRetProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
 	const int hookIndex = MSG_CALLWNDRET;
 
-	if (deniedProcessList[nowClient->processName] ||
+	if (deniedProcessList[nowClient->m_processName] ||
 		NULL == nowClient ||
 		nCode < 0)
 	{
 		return CallNextHookEx(hookList[hookIndex], nCode, wParam, lParam);
 	}
 
-	if (false == nowClient->processName.empty())
+	if (false == nowClient->m_processName.empty())
 	{
 		switch (nCode)
 		{
@@ -155,14 +155,14 @@ LRESULT CALLBACK GetMsgProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
 	const int hookIndex = MSG_GETMSG;
 
-	if (deniedProcessList[nowClient->processName] ||
+	if (deniedProcessList[nowClient->m_processName] ||
 		NULL == nowClient ||
 		nCode < 0)
 	{
 		return CallNextHookEx(hookList[hookIndex], nCode, wParam, lParam);
 	}
 
-	if (false == nowClient->processName.empty())
+	if (false == nowClient->m_processName.empty())
 	{
 		switch (nCode)
 		{
@@ -185,8 +185,8 @@ LRESULT CALLBACK GetMsgProc(int nCode, WPARAM wParam, LPARAM lParam)
 	return CallNextHookEx(hookList[hookIndex], nCode, wParam, lParam);
 }
 
-BOOL CClient::readListQuit = FALSE;
-BOOL CClient::sendFlag = FALSE;
+BOOL CClient::m_readListQuit = FALSE;
+BOOL CClient::m_sendFlag = FALSE;
 
 CClient::CClient()
 {}
@@ -196,23 +196,20 @@ CClient::~CClient()
 
 void CClient::Start(LPWSTR _processName)
 {
-	processName = std::wstring(_processName);
-	for (int i = 0; i < processName.size(); i++)
+	m_processName = std::wstring(_processName);
+	for (int i = 0; i < m_processName.size(); i++)
 	{
-		processName[i] = towlower(processName[i]);
+		m_processName[i] = towlower(m_processName[i]);
 	}
-	/*for (int i = 0; i < processName.size(); i++)
-	{
-		processName[i] = towlower(processName[i]);
-	}*/
-	if (TRUE == deniedProcessList[processName])
+
+	if (TRUE == deniedProcessList[m_processName])
 	{
 		return;
 	}
 
-	StringCchCopyW(curSendData.processName, wcslen(_processName) + 1, processName.data());
-	curSendData.processID = GetCurrentProcessId();
-	curSendData.hInstance = (HINSTANCE)GetModuleHandleW(NULL);
+	StringCchCopyW(m_curSendData.m_processName, wcslen(_processName) + 1, m_processName.data());
+	m_curSendData.processID = GetCurrentProcessId();
+	m_curSendData.hInstance = (HINSTANCE)GetModuleHandleW(NULL);
 
 	m_hMapFile = OpenFileMapping(
 		FILE_MAP_ALL_ACCESS,   // read/write access
@@ -238,34 +235,34 @@ void CClient::Start(LPWSTR _processName)
 
 	m_listWriteDone = CreateEventW(NULL, TRUE, TRUE, m_writeDoneEvent);
 
-	readListHandle = (HANDLE)_beginthreadex(NULL, 0, ReadListThread, (LPVOID)this, 0, NULL);
+	m_readListHandle = (HANDLE)_beginthreadex(NULL, 0, ReadListThread, (LPVOID)this, 0, NULL);
 }
 
 void CClient::End()
 {
-	if (TRUE == deniedProcessList[processName])
+	if (TRUE == deniedProcessList[m_processName])
 	{
 		return;
 	}
 
-	readListQuit = TRUE;
+	m_readListQuit = TRUE;
 	UnmapViewOfFile(m_pBuf);
 	CloseHandle(m_listWriteDone);
 	CloseHandle(m_hMapFile);
 	
-	DWORD retFunc = WaitForSingleObject(readListHandle, 10000);
+	DWORD retFunc = WaitForSingleObject(m_readListHandle, 10000);
 	if (WAIT_TIMEOUT == retFunc)
 	{
-		TerminateThread(readListHandle, 0);
+		TerminateThread(m_readListHandle, 0);
 	}
 
-	readListHandle = INVALID_HANDLE_VALUE;
-	CloseHandle(readListHandle);
+	m_readListHandle = INVALID_HANDLE_VALUE;
+	CloseHandle(m_readListHandle);
 }
 
 BOOL CClient::Connect()
 {
-	pipeHandle = CreateFileW(
+	m_pipeHandle = CreateFileW(
 		m_pipeName,   // pipe name 
 		GENERIC_READ | GENERIC_WRITE, // read and write access 
 		0,              // no sharing 
@@ -274,7 +271,7 @@ BOOL CClient::Connect()
 		0,              // default attributes 
 		NULL);          // no template file 
 
-	if (INVALID_HANDLE_VALUE == pipeHandle)
+	if (INVALID_HANDLE_VALUE == m_pipeHandle)
 	{
 		if (ERROR_PIPE_BUSY != GetLastError())
 		{
@@ -292,7 +289,7 @@ BOOL CClient::Connect()
 
 	DWORD pipeMode = PIPE_READMODE_MESSAGE;
 	BOOL fSuccess = SetNamedPipeHandleState(
-		pipeHandle,    // pipe handle 
+		m_pipeHandle,    // pipe handle 
 		&pipeMode,	  // pipe mode 
 		NULL,		 // maximum bytes 
 		NULL);		// maximum time 
@@ -307,8 +304,8 @@ BOOL CClient::Connect()
 
 void CClient::Disconnect()
 {
-	FlushFileBuffers(pipeHandle);
-	CloseHandle(pipeHandle);
+	FlushFileBuffers(m_pipeHandle);
+	CloseHandle(m_pipeHandle);
 }
 
 UINT CClient::ReadListThread(void * arg)
@@ -321,7 +318,7 @@ void CClient::ReadList()
 {
 	while (true)
 	{
-		if (TRUE == readListQuit
+		if (TRUE == m_readListQuit
 			|| (m_pBuf[0] == 0xFF && m_pBuf[1] == 0xFF
 				&& m_pBuf[2] == 0xFF && m_pBuf[3] == 0xFF))
 		{
@@ -329,14 +326,14 @@ void CClient::ReadList()
 		}
 
 		std::wstring nowData(m_pBuf);
-		size_t subLocation = nowData.find(processName);
+		size_t subLocation = nowData.find(m_processName);
 		if (std::wstring::npos == subLocation)
 		{
-			sendFlag = FALSE;
+			m_sendFlag = FALSE;
 		}
 		else
 		{
-			sendFlag = TRUE;
+			m_sendFlag = TRUE;
 		}
 
 		WaitForSingleObject(m_listWriteDone, INFINITE); // 60sec
@@ -393,48 +390,48 @@ void CClient::MakeMsg(int _nCode, WPARAM _wParam, LPARAM _lParam, int _hookType)
 	{
 	case WM_CREATE:
 		tmpCSpt = (LPCREATESTRUCTW)sendlParam;
-		memset(curSendData.otherData, 0, MAX_PATH);
-		wsprintf(curSendData.otherData, L"x:%d, y:%d, cx:%d, cy:%d",
+		memset(m_curSendData.otherData, 0, MAX_PATH);
+		wsprintf(m_curSendData.otherData, L"x:%d | y:%d | cx:%d | cy:%d",
 			tmpCSpt->x, tmpCSpt->y, tmpCSpt->cx, tmpCSpt->cy);
 		break;
 
 	case WM_WINDOWPOSCHANGED:
 		tmpWPpt = (LPWINDOWPOS)sendlParam;
-		memset(curSendData.otherData, 0, MAX_PATH);
-		wsprintf(curSendData.otherData, L"x:%d, y:%d, cx:%d, cy:%d, flags:%d",
+		memset(m_curSendData.otherData, 0, MAX_PATH);
+		wsprintf(m_curSendData.otherData, L"x:%d | y:%d | cx:%d | cy:%d | flags:%d",
 			tmpWPpt->x, tmpWPpt->y, tmpWPpt->cx, tmpWPpt->cy, tmpWPpt->flags);
 		break;
 
 	case WM_STYLECHANGED:
 		tmpSSpt = (LPSTYLESTRUCT)sendlParam;
-		memset(curSendData.otherData, 0, MAX_PATH);
-		wsprintf(curSendData.otherData, L"old:%d,new:%d",
+		memset(m_curSendData.otherData, 0, MAX_PATH);
+		wsprintf(m_curSendData.otherData, L"old:%d,new:%d",
 			tmpSSpt->styleOld, tmpSSpt->styleNew);
 		break;
 
 	case WM_SETTEXT:
-		memset(curSendData.otherData, 0, MAX_PATH);
-		wsprintf(curSendData.otherData, L"%s",
+		memset(m_curSendData.otherData, 0, MAX_PATH);
+		wsprintf(m_curSendData.otherData, L"%s",
 			(LPWSTR)sendlParam);
 		break;
 		
 	default:
-		memset(curSendData.otherData, 0, MAX_PATH);
+		memset(m_curSendData.otherData, 0, MAX_PATH);
 		break;
 	}
 
-	curSendData.hookType = _hookType;
-	curSendData.msgCode = sendMsgCode;
-	curSendData.hwnd = sendHwnd;
-	curSendData.wParam = sendwParam;
-	curSendData.lParam = sendlParam;
+	m_curSendData.hookType = _hookType;
+	m_curSendData.msgCode = sendMsgCode;
+	m_curSendData.hwnd = sendHwnd;
+	m_curSendData.wParam = sendwParam;
+	m_curSendData.lParam = sendlParam;
 
-	curSendData.threadID = GetThreadId(GetCurrentThread());
+	m_curSendData.threadID = GetThreadId(GetCurrentThread());
 }
 
 BOOL CClient::SendMsg()
 {
-	if (FALSE == sendFlag)
+	if (FALSE == m_sendFlag)
 	{
 		return FALSE;
 	}
@@ -452,10 +449,10 @@ BOOL CClient::SendMsg()
 	ov.hEvent = writeEventHandle;
 
 	DWORD cbWritten = 0;
-	DWORD sendMsgLen = sizeof(curSendData);
+	DWORD sendMsgLen = sizeof(m_curSendData);
 	succFunc = WriteFile(
-		pipeHandle,                  // pipe handle 
-		&curSendData,             // message 
+		m_pipeHandle,                  // pipe handle 
+		&m_curSendData,             // message 
 		sendMsgLen,              // message length 
 		&cbWritten,             // bytes written 
 		&ov);                  // overlapped 

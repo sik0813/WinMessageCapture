@@ -57,12 +57,16 @@ BOOL CCollectDlg::End()
 		delete m_childOption;
 		m_childOption = NULL;
 	}
+	m_threadQuit = TRUE;
+
+	SetEvent(m_queueNotEmpty);
 	CloseHandle(m_queueNotEmpty);
 	LeaveCriticalSection(&m_readWriteCS);
 
+	DestroyWindow(m_collectListHwnd);
 	DestroyWindow(m_ownHwnd);
 
-	m_threadQuit = TRUE;
+	
 	WaitForSingleObject(m_threadHandle, INFINITE);
 	CloseHandle(m_threadHandle);
 	m_threadHandle = INVALID_HANDLE_VALUE;
@@ -96,9 +100,39 @@ INT_PTR CALLBACK CCollectDlg::RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARA
 
 	case WM_SETOPTION:
 		BOOL succFunc = pointerThis->m_childOption->GetOption(&(pointerThis->m_curSettingData));
-		if (TRUE == succFunc && FALSE == pointerThis->m_showMsgData)
+		if (TRUE == succFunc)
 		{
-			pointerThis->m_showMsgData = TRUE;
+			if (FALSE == pointerThis->m_showMsgData)
+			{
+				PostMessageW(hwnd, WM_COMMAND, MAKEWPARAM(IDC_STARTSUSPEND, IDC_STARTSUSPEND), NULL);
+			}			
+
+			// wParam, lParam Show/noShow
+			if (TRUE == pointerThis->m_curSettingData.wParamShow)
+			{
+				pointerThis->m_lvCol.cx = 70;
+				pointerThis->m_lvCol.pszText = L"wParam";
+				ListView_SetColumn(pointerThis->m_collectListHwnd, colIndex::wParam, &(pointerThis->m_lvCol));
+			}
+			else
+			{
+				pointerThis->m_lvCol.cx = 0;
+				pointerThis->m_lvCol.pszText = L"wParam";
+				ListView_SetColumn(pointerThis->m_collectListHwnd, colIndex::wParam, &(pointerThis->m_lvCol));
+			}
+
+			if (TRUE == pointerThis->m_curSettingData.lParamShow)
+			{
+				pointerThis->m_lvCol.cx = 70;
+				pointerThis->m_lvCol.pszText = L"lParam";
+				ListView_SetColumn(pointerThis->m_collectListHwnd, colIndex::lParam, &(pointerThis->m_lvCol));
+			}
+			else
+			{
+				pointerThis->m_lvCol.cx = 0;
+				pointerThis->m_lvCol.pszText = L"lParam";
+				ListView_SetColumn(pointerThis->m_collectListHwnd, colIndex::lParam, &(pointerThis->m_lvCol));
+			}
 		}
 		delete pointerThis->m_childOption;
 		pointerThis->m_childOption = NULL;
@@ -112,7 +146,6 @@ INT_PTR CALLBACK CCollectDlg::RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARA
 BOOL CCollectDlg::InitDialog(HWND hwnd, HWND hwndFocus, LPARAM lParam)
 {
 	m_startAndSuspend = GetDlgItem(hwnd, IDC_STARTSUSPEND);
-	SendMessageW(m_startAndSuspend, WM_SETTEXT, 0, (LPARAM)L"시작");
 
 	InitCommonControls(); // Force the common controls DLL to be loaded.
 
@@ -120,7 +153,7 @@ BOOL CCollectDlg::InitDialog(HWND hwnd, HWND hwndFocus, LPARAM lParam)
 	m_collectListHwnd = CreateWindowExW(
 		0, (LPWSTR)WC_LISTVIEWW, NULL,
 		WS_VISIBLE | WS_CHILD | WS_BORDER | LVS_SHOWSELALWAYS | LVS_REPORT,
-		11, 68, 551, 452,
+		11, 68, 776, 452,
 		hwnd, NULL, NULL, NULL);
 
 	memset(&m_lvCol, 0, sizeof(LVCOLUMNW));
@@ -128,47 +161,63 @@ BOOL CCollectDlg::InitDialog(HWND hwnd, HWND hwndFocus, LPARAM lParam)
 	m_lvCol.iSubItem = 0;
 	m_lvCol.fmt = LVCFMT_LEFT;
 	
-	m_lvCol.cx = 60;
+	m_lvCol.cx = 70;
 	m_lvCol.pszText = L"Index";
-	ListView_InsertColumn(m_collectListHwnd, 0, &m_lvCol);
+	ListView_InsertColumn(m_collectListHwnd, (int)colIndex::index, &m_lvCol);
 
 	m_lvCol.cx = 80;
 	m_lvCol.pszText = L"Process Name";
-	ListView_InsertColumn(m_collectListHwnd, 1, &m_lvCol);
+	ListView_InsertColumn(m_collectListHwnd, (int)colIndex::pName, &m_lvCol);
 
 	m_lvCol.cx = 60;
 	m_lvCol.pszText = L"PID";
-	ListView_InsertColumn(m_collectListHwnd, 2, &m_lvCol);
+	ListView_InsertColumn(m_collectListHwnd, (int)colIndex::pID, &m_lvCol);
 
 	m_lvCol.cx = 60;
 	m_lvCol.pszText = L"TID";
-	ListView_InsertColumn(m_collectListHwnd, 3, &m_lvCol);
+	ListView_InsertColumn(m_collectListHwnd, (int)colIndex::tID, &m_lvCol);
 
-	m_lvCol.cx = 80;
+	m_lvCol.cx = 60;
+	m_lvCol.pszText = L"Msg Content";
+	ListView_InsertColumn(m_collectListHwnd, (int)colIndex::msgContent, &m_lvCol);
+
+	m_lvCol.cx = 60;
+	m_lvCol.pszText = L"Msg Code";
+	ListView_InsertColumn(m_collectListHwnd, (int)colIndex::msgCode, &m_lvCol);
+
+	m_lvCol.cx = 20;
+	m_lvCol.pszText = L"Msg Type";
+	ListView_InsertColumn(m_collectListHwnd, (int)colIndex::msgType, &m_lvCol);
+
+	m_lvCol.cx = 70;
 	m_lvCol.pszText = L"wParam";
-	ListView_InsertColumn(m_collectListHwnd, 4, &m_lvCol);
+	ListView_InsertColumn(m_collectListHwnd, (int)colIndex::wParam, &m_lvCol);
 
-	m_lvCol.cx = 80;
+	m_lvCol.cx = 70;
 	m_lvCol.pszText = L"lParam";
-	ListView_InsertColumn(m_collectListHwnd, 5, &m_lvCol);
+	ListView_InsertColumn(m_collectListHwnd, (int)colIndex::lParam, &m_lvCol);
+
+	m_lvCol.cx = 60;
+	m_lvCol.pszText = L"Caption";
+	ListView_InsertColumn(m_collectListHwnd, (int)colIndex::caption, &m_lvCol);
+
+	m_lvCol.cx = 60;
+	m_lvCol.pszText = L"Class Name";
+	ListView_InsertColumn(m_collectListHwnd, (int)colIndex::className, &m_lvCol);
+
+	m_lvCol.cx = 60;
+	m_lvCol.pszText = L"Style";
+	ListView_InsertColumn(m_collectListHwnd, (int)colIndex::style, &m_lvCol);
 
 	m_lvCol.cx = 100;
 	m_lvCol.pszText = L"Detail";
-	ListView_InsertColumn(m_collectListHwnd, 6, &m_lvCol);
+	ListView_InsertColumn(m_collectListHwnd, (int)colIndex::detail, &m_lvCol);
 
 	memset(&m_lvItem, 0, sizeof(LVITEMW));
 	m_lvItem.mask = LVIF_TEXT;   // Text Style
 	m_lvItem.cchTextMax = 256; // Max size of test
 	m_lvItem.iSubItem = 0;       // col
 	m_lvItem.iItem = 0;     // row
-
-	for (int i = 0; i < 100;)
-	{
-		m_lvItem.iItem = i++;     // choose item  
-		std::wstring tmpString = L"Item " + std::to_wstring(i);
-		m_lvItem.pszText = &tmpString[0]; // Text to display
-		ListView_InsertItem(m_collectListHwnd, (LPARAM)&m_lvItem);
-	}	
 
 	//Option 설정
 	PostMessageW(hwnd, WM_COMMAND, MAKEWPARAM(IDC_OPTION, IDC_OPTION), NULL);
@@ -234,6 +283,7 @@ UINT CCollectDlg::DisplayDataThread(void * arg)
 void CCollectDlg::DisplayData()
 {
 	std::queue<MsgData> inputMsgQeuue;
+	saveDataList.reserve(1024);
 	while (true)
 	{
 		HWND listHwnd = GetDlgItem(m_ownHwnd, IDC_COLLECTLIST);
@@ -259,6 +309,7 @@ void CCollectDlg::DisplayData()
 
 		while (!inputMsgQeuue.empty())
 		{
+			SaveData curSaveData;
 			MsgData inputMsgData = inputMsgQeuue.front();
 			inputMsgQeuue.pop();
 
@@ -275,89 +326,63 @@ void CCollectDlg::DisplayData()
 				continue;
 			}
 
-			std::wstring viewMsg = L"";
-			std::wstring lineNum = std::to_wstring(m_listRowIndex++);
+			WCHAR buf[32] = { 0, };
 
 			// Line number(8자리수) 추가
-			viewMsg += L"<";
-			for (int i = 0; i < 8 - lineNum.size(); i++)
-				viewMsg += L"0";
-			viewMsg += lineNum + L"> ";
+			wsprintf(buf, L"<%08d>", m_listRowIndex);
+			curSaveData.index = std::wstring(buf);
 
 			// Process Name 추가
-			viewMsg += L" [" + std::wstring(inputMsgData.processName);
+			curSaveData.pName = std::wstring(inputMsgData.processName);
 
 			// Process ID 추가
-			viewMsg += L" (" + std::to_wstring(inputMsgData.processID) + L")";
+			curSaveData.pID = std::to_wstring(inputMsgData.processID);
 
 			// Thread ID 추가
-			viewMsg += L"[" + std::to_wstring(inputMsgData.threadID) + L"]]";
+			curSaveData.tID = std::to_wstring(inputMsgData.threadID);
 
 			// Message Content 추가
 			if (NULL == wmToString[inputMsgData.msgCode])
 			{
-				viewMsg += L" [unknown]";
+				curSaveData.msgContent = L"unknown";
 			}
 			else
 			{
-				viewMsg += L" [" + std::wstring(wmToString[inputMsgData.msgCode]) + L"]";
+				curSaveData.msgContent = std::wstring(wmToString[inputMsgData.msgCode]);
 			}
 
 			// Message Code 추가
-			WCHAR buf[32] = { 0, };
-			wsprintf(buf, L"0x%08X", inputMsgData.msgCode);
-			viewMsg += L"(" + std::wstring(buf) + L")";
+			memset(buf, 0, 32);
+			wsprintf(buf, L"%d", inputMsgData.msgCode);
+			curSaveData.msgCode = std::wstring(buf);
 
 			switch (inputMsgData.hookType)
 			{
 			case MSG_CALLWND:
 				// Msg type 추가
-				viewMsg += L" S";
-
-				// wParam 추가
-				memset(buf, 0, 32);
-				wsprintf(buf, L"0x%016X", inputMsgData.wParam);
-				viewMsg += L" wParam:" + std::wstring(buf);
-
-				// lParam 추가
-				memset(buf, 0, 32);
-				wsprintf(buf, L"0x%016X", inputMsgData.lParam);
-				viewMsg += L" lParam:" + std::wstring(buf);
+				curSaveData.msgType = L"S";
 				break;
 
 			case MSG_CALLWNDRET:
 				// Msg type 추가
-				viewMsg += L" R";
-
-				// wParam 추가
-				memset(buf, 0, 32);
-				wsprintf(buf, L"0x%016X", inputMsgData.wParam);
-				viewMsg += L" wParam:" + std::wstring(buf);
-
-				// lParam 추가
-				memset(buf, 0, 32);
-				wsprintf(buf, L"0x%016X", inputMsgData.lParam);
-				viewMsg += L" lParam:" + std::wstring(buf);
+				curSaveData.msgType = L"R";
 				break;
 
 			case MSG_GETMSG:
 				// Msg type 추가
-				viewMsg += L" P";
-
-				// wParam 추가
-				memset(buf, 0, 32);
-				wsprintf(buf, L"0x%016X", inputMsgData.wParam);
-				viewMsg += L" wParam:" + std::wstring(buf);
-
-				// lParam 추가
-				memset(buf, 0, 32);
-				wsprintf(buf, L"0x%016X", inputMsgData.lParam);
-				viewMsg += L" lParam:" + std::wstring(buf);
-				break;
-
-			default:
+				curSaveData.msgType = L"P";
 				break;
 			}
+			
+			// wParam 추가
+			memset(buf, 0, 32);
+			wsprintf(buf, L"0x%016X", inputMsgData.wParam);
+			curSaveData.wParam = std::wstring(buf);
+
+			// lParam 추가
+			memset(buf, 0, 32);
+			wsprintf(buf, L"0x%016X", inputMsgData.lParam);
+			curSaveData.lParam = std::wstring(buf);
 
 			switch (inputMsgData.msgCode)
 			{
@@ -374,25 +399,20 @@ void CCollectDlg::DisplayData()
 				GetWindowTextW(inputMsgData.hwnd, longBuf, MAX_PATH);
 				if (longBuf[0] != '\0')
 				{
-					viewMsg += L" Caption:" + std::wstring(longBuf);
+					curSaveData.caption += std::wstring(longBuf);
 				}
 
 				memset(longBuf, 0, MAX_PATH);
 				GetClassNameW(inputMsgData.hwnd, longBuf, MAX_PATH);
 				if (longBuf[0] != '\0')
 				{
-					viewMsg += L" ClassName:" + std::wstring(longBuf);
+					curSaveData.className += std::wstring(longBuf);
 				}
 
 				WNDCLASSW wndClass;
 				GetClassInfoW(inputMsgData.hInstance, longBuf, &wndClass);
 
-				viewMsg += L" ";
-				AddStyleString(&viewMsg, wndClass.style);
-				if (L' ' == viewMsg.back())
-				{
-					viewMsg.pop_back();
-				}
+				AddStyleString(&curSaveData.style, wndClass.style);
 				break;
 			}
 
@@ -402,84 +422,84 @@ void CCollectDlg::DisplayData()
 			{
 			case WM_CREATE:
 			case WM_WINDOWPOSCHANGED:
-				viewMsg += L" " + std::wstring(inputMsgData.otherData);
+				curSaveData.detail += L" " + std::wstring(inputMsgData.otherData);
 				break;
 
 			case WM_SETTEXT:
-				viewMsg += L" Text:" + std::wstring(inputMsgData.otherData);
+				curSaveData.detail += L" Text:" + std::wstring(inputMsgData.otherData);
 				break;
 
 			case WM_STYLECHANGED:
 				optionData = std::wstring(inputMsgData.otherData);
 				front = optionData.find(L':');
-				viewMsg += L" Old";
-				AddStyleString(&viewMsg, std::stoi(optionData.substr(front + 1)));
+				curSaveData.detail += L" Old";
+				AddStyleString(&curSaveData.detail, std::stoi(optionData.substr(front + 1)), 2);
 
-				viewMsg += L" New";
+				curSaveData.detail += L" New";
 				front = optionData.find_last_of(L':');
-				AddStyleString(&viewMsg, std::stoi(optionData.substr(front + 1)));
+				AddStyleString(&curSaveData.detail, std::stoi(optionData.substr(front + 1)), 2);
 				break;
 
 			case WM_SHOWWINDOW:
-				viewMsg += L" WindowShow:";
-				viewMsg += inputMsgData.wParam?L"TRUE":L"FALSE";
+				curSaveData.detail += L" WindowShow:";
+				curSaveData.detail += inputMsgData.wParam?L"TRUE":L"FALSE";
 
 				switch (inputMsgData.lParam)
 				{
 				case SW_OTHERUNZOOM:
-					viewMsg += L" Status:SW_OTHERUNZOOM";
+					curSaveData.detail += L" Status:SW_OTHERUNZOOM";
 					break;
 
 				case SW_OTHERZOOM:
-					viewMsg += L" Status:SW_OTHERZOOM";
+					curSaveData.detail += L" Status:SW_OTHERZOOM";
 					break;
 
 				case SW_PARENTCLOSING:
-					viewMsg += L" Status:SW_PARENTCLOSING";
+					curSaveData.detail += L" Status:SW_PARENTCLOSING";
 					break;
 
 				case SW_PARENTOPENING:
-					viewMsg += L" Status:SW_PARENTOPENING";
+					curSaveData.detail += L" Status:SW_PARENTOPENING";
 					break;
 				}
 				break;
 
 			case WM_NCACTIVATE:
-				viewMsg += L" IconDraw:";
-				viewMsg += inputMsgData.wParam ? L"TRUE" : L"FALSE";
+				curSaveData.detail += L" IconDraw:";
+				curSaveData.detail += inputMsgData.wParam ? L"TRUE" : L"FALSE";
 				break;
 
 			case WM_SIZE:
 				switch (inputMsgData.wParam)
 				{
 				case SIZE_MAXHIDE:
-					viewMsg += L" ResizingType:SIZE_MAXHIDE";
+					curSaveData.detail += L" ResizingType:SIZE_MAXHIDE";
 					break;
 
 				case SIZE_MAXIMIZED:
-					viewMsg += L" ResizingType:SIZE_MAXIMIZED";
+					curSaveData.detail += L" ResizingType:SIZE_MAXIMIZED";
 					break;
 
 				case SIZE_MAXSHOW:
-					viewMsg += L" ResizingType:SIZE_MAXSHOW";
+					curSaveData.detail += L" ResizingType:SIZE_MAXSHOW";
 					break;
 
 				case SIZE_MINIMIZED:
-					viewMsg += L" ResizingType:SIZE_MINIMIZED";
+					curSaveData.detail += L" ResizingType:SIZE_MINIMIZED";
 					break;
 
 				case SIZE_RESTORED:
-					viewMsg += L" ResizingType:SIZE_RESTORED";
+					curSaveData.detail += L" ResizingType:SIZE_RESTORED";
 					break;
 				}
 
-				viewMsg += L" Width:" + std::to_wstring(LOWORD(inputMsgData.lParam));
-				viewMsg += L" Height:" + std::to_wstring(HIWORD(inputMsgData.lParam));
+				curSaveData.detail += L" Width:" + std::to_wstring(LOWORD(inputMsgData.lParam));
+				curSaveData.detail += L" Height:" + std::to_wstring(HIWORD(inputMsgData.lParam));
 				break;
 
 			case WM_MOVE:
-				viewMsg += L" CX:" + std::to_wstring(LOWORD(inputMsgData.lParam));
-				viewMsg += L" CY:" + std::to_wstring(HIWORD(inputMsgData.lParam));
+				curSaveData.detail += L" CX:" + std::to_wstring(LOWORD(inputMsgData.lParam));
+				curSaveData.detail += L" CY:" + std::to_wstring(HIWORD(inputMsgData.lParam));
 				break;
 			}
 
@@ -489,146 +509,201 @@ void CCollectDlg::DisplayData()
 				break;
 			}
 
-			SendMessageW(listHwnd, LB_INSERTSTRING, (WPARAM)-1, (LPARAM)viewMsg.data());
-			LRESULT count = SendMessageW(listHwnd, LB_GETCOUNT, 0, 0);
-			SendMessageW(listHwnd, LB_SETTOPINDEX, (WPARAM)count - 1, (LPARAM)0);
+			m_lvItem.iItem = m_listRowIndex++;     // choose item
+			
+			m_lvItem.iSubItem = (int)colIndex::index;
+			m_lvItem.pszText = &curSaveData.index[0];
+			ListView_InsertItem(m_collectListHwnd, (LPARAM)&m_lvItem);
+
+			m_lvItem.iSubItem = (int)colIndex::pName;
+			m_lvItem.pszText = &curSaveData.pName[0];
+			ListView_SetItem(m_collectListHwnd, (LPARAM)&m_lvItem);
+
+			m_lvItem.iSubItem = (int)colIndex::pID;
+			m_lvItem.pszText = &curSaveData.pID[0];
+			ListView_SetItem(m_collectListHwnd, (LPARAM)&m_lvItem);
+
+			m_lvItem.iSubItem = (int)colIndex::tID;
+			m_lvItem.pszText = &curSaveData.tID[0];
+			ListView_SetItem(m_collectListHwnd, (LPARAM)&m_lvItem);
+
+			m_lvItem.iSubItem = (int)colIndex::msgContent;
+			m_lvItem.pszText = &curSaveData.msgContent[0];
+			ListView_SetItem(m_collectListHwnd, (LPARAM)&m_lvItem);
+
+			m_lvItem.iSubItem = (int)colIndex::msgCode;
+			m_lvItem.pszText = &curSaveData.msgCode[0];
+			ListView_SetItem(m_collectListHwnd, (LPARAM)&m_lvItem);
+
+			m_lvItem.iSubItem = (int)colIndex::msgType;
+			m_lvItem.pszText = &curSaveData.msgType[0];
+			ListView_SetItem(m_collectListHwnd, (LPARAM)&m_lvItem);
+
+			m_lvItem.iSubItem = (int)colIndex::wParam;
+			m_lvItem.pszText = &curSaveData.wParam[0];
+			ListView_SetItem(m_collectListHwnd, (LPARAM)&m_lvItem);
+
+			m_lvItem.iSubItem = (int)colIndex::lParam;
+			m_lvItem.pszText = &curSaveData.lParam[0];
+			ListView_SetItem(m_collectListHwnd, (LPARAM)&m_lvItem);
+
+			m_lvItem.iSubItem = (int)colIndex::caption;
+			m_lvItem.pszText = &curSaveData.caption[0];
+			ListView_SetItem(m_collectListHwnd, (LPARAM)&m_lvItem);
+
+			m_lvItem.iSubItem = (int)colIndex::className;
+			m_lvItem.pszText = &curSaveData.className[0];
+			ListView_SetItem(m_collectListHwnd, (LPARAM)&m_lvItem);
+
+			m_lvItem.iSubItem = (int)colIndex::style;
+			m_lvItem.pszText = &curSaveData.style[0];
+			ListView_SetItem(m_collectListHwnd, (LPARAM)&m_lvItem);
+
+			m_lvItem.iSubItem = (int)colIndex::detail;
+			m_lvItem.pszText = &curSaveData.detail[0];
+			ListView_SetItem(m_collectListHwnd, (LPARAM)&m_lvItem);
+
+			saveDataList.push_back(curSaveData);
+			//SendMessageW(listHwnd, LB_INSERTSTRING, (WPARAM)-1, (LPARAM)viewMsg.data());
+			//LRESULT count = SendMessageW(listHwnd, LB_GETCOUNT, 0, 0);
+			//SendMessageW(listHwnd, LB_SETTOPINDEX, (WPARAM)count - 1, (LPARAM)0);
 		}
 
 	}
 }
 
-void CCollectDlg::AddStyleString(std::wstring *_inputString, UINT _inputStyle)
+void CCollectDlg::AddStyleString(std::wstring *_inputString, UINT _inputStyle, int _type)
 {
 	std::wstring styleString = L"";
 
 	if (WS_BORDER & _inputStyle)
 	{
-		styleString += L"WS_BORDER,";
+		styleString += L"WS_BORDER|";
 	}
 
 	if (WS_CAPTION & _inputStyle)
 	{
-		styleString += L"WS_CAPTION,";
+		styleString += L"WS_CAPTION|";
 	}
 
 	if (WS_CHILD & _inputStyle)
 	{
-		styleString += L"WS_CHILD,";
+		styleString += L"WS_CHILD|";
 	}
 
 	if (WS_CHILDWINDOW & _inputStyle)
 	{
-		styleString += L"WS_CHILDWINDOW,";
+		styleString += L"WS_CHILDWINDOW|";
 	}
 
 	if (WS_CLIPCHILDREN & _inputStyle)
 	{
-		styleString += L"WS_CLIPCHILDREN,";
+		styleString += L"WS_CLIPCHILDREN|";
 	}
 
 	if (WS_CLIPSIBLINGS & _inputStyle)
 	{
-		styleString += L"WS_CLIPSIBLINGS,";
+		styleString += L"WS_CLIPSIBLINGS|";
 	}
 
 	if (WS_DISABLED & _inputStyle)
 	{
-		styleString += L"WS_DISABLED,";
+		styleString += L"WS_DISABLED|";
 	}
 
 	if (WS_DLGFRAME & _inputStyle)
 	{
-		styleString += L"WS_DLGFRAME,";
+		styleString += L"WS_DLGFRAME|";
 	}
 
 	if (WS_GROUP & _inputStyle)
 	{
-		styleString += L"WS_GROUP,";
+		styleString += L"WS_GROUP|";
 	}
 
 	if (WS_HSCROLL & _inputStyle)
 	{
-		styleString += L"WS_HSCROLL,";
+		styleString += L"WS_HSCROLL|";
 	}
 
 	if (WS_ICONIC & _inputStyle)
 	{
-		styleString += L"WS_ICONIC,";
+		styleString += L"WS_ICONIC|";
 	}
 
 	if (WS_MAXIMIZE & _inputStyle)
 	{
-		styleString += L"WS_MAXIMIZE,";
+		styleString += L"WS_MAXIMIZE|";
 	}
 
 	if (WS_MAXIMIZEBOX & _inputStyle)
 	{
-		styleString += L"WS_MAXIMIZEBOX,";
+		styleString += L"WS_MAXIMIZEBOX|";
 	}
 
 	if (WS_MINIMIZE & _inputStyle)
 	{
-		styleString += L"WS_MINIMIZE,";
+		styleString += L"WS_MINIMIZE|";
 	}
 
 	if (WS_MINIMIZEBOX & _inputStyle)
 	{
-		styleString += L"WS_MINIMIZEBOX,";
+		styleString += L"WS_MINIMIZEBOX|";
 	}
 
 	if (WS_OVERLAPPED & _inputStyle)
 	{
-		styleString += L"WS_OVERLAPPED,";
+		styleString += L"WS_OVERLAPPED|";
 	}
 
 	if (WS_OVERLAPPEDWINDOW & _inputStyle)
 	{
-		styleString += L"WS_OVERLAPPEDWINDOW,";
+		styleString += L"WS_OVERLAPPEDWINDOW|";
 	}
 
 	if (WS_POPUP & _inputStyle)
 	{
-		styleString += L"WS_POPUP,";
+		styleString += L"WS_POPUP|";
 	}
 
 	if (WS_POPUPWINDOW & _inputStyle)
 	{
-		styleString += L"WS_POPUPWINDOW,";
+		styleString += L"WS_POPUPWINDOW|";
 	}
 
 	if (WS_SIZEBOX & _inputStyle)
 	{
-		styleString += L"WS_SIZEBOX,";
+		styleString += L"WS_SIZEBOX|";
 	}
 
 	if (WS_SYSMENU & _inputStyle)
 	{
-		styleString += L"WS_SYSMENU,";
+		styleString += L"WS_SYSMENU|";
 	}
 
 	if (WS_TABSTOP & _inputStyle)
 	{
-		styleString += L"WS_TABSTOP,";
+		styleString += L"WS_TABSTOP|";
 	}
 
 	if (WS_THICKFRAME & _inputStyle)
 	{
-		styleString += L"WS_THICKFRAME,";
+		styleString += L"WS_THICKFRAME|";
 	}
 
 	if (WS_TILED & _inputStyle)
 	{
-		styleString += L"WS_TILED,";
+		styleString += L"WS_TILED|";
 	}
 
 	if (WS_TILEDWINDOW & _inputStyle)
 	{
-		styleString += L"WS_TILEDWINDOW,";
+		styleString += L"WS_TILEDWINDOW|";
 	}
 
 	if (WS_VISIBLE & _inputStyle)
 	{
-		styleString += L"WS_VISIBLE,";
+		styleString += L"WS_VISIBLE|";
 	}
 
 	if (WS_VSCROLL & _inputStyle)
@@ -638,19 +713,26 @@ void CCollectDlg::AddStyleString(std::wstring *_inputString, UINT _inputStyle)
 
 	if (!styleString.empty())
 	{
-		if (L',' == styleString.back())
+		if (L'|' == styleString.back())
 		{
 			styleString.pop_back();
 		}
 
-		*_inputString += L"Style: " + styleString;
+		if (1 == _type)
+		{
+			*_inputString += styleString;
+		}
+		else if (2 == _type)
+		{
+			*_inputString += L"Style: " + styleString;
+		}
 	}
 }
 
 BOOL CCollectDlg::SaveLog(HWND hwnd)
 {
-	HWND ListBoxHwnd = GetDlgItem(hwnd, IDC_COLLECTLIST);
-	LRESULT count = SendMessageW(ListBoxHwnd, LB_GETCOUNT, 0, 0);
+	//HWND ListBoxHwnd = GetDlgItem(hwnd, IDC_COLLECTLIST);
+	//LRESULT count = SendMessageW(ListBoxHwnd, LB_GETCOUNT, 0, 0);
 
 	// 저장 경로 지정
 	OPENFILENAMEW oFile;
@@ -664,7 +746,7 @@ BOOL CCollectDlg::SaveLog(HWND hwnd)
 	oFile.lpstrFilter = L"Text Files (*.txt)\0*.txt\0All Files (*.*)\0*.*\0";
 	oFile.lpstrFile = saveFileName;
 	oFile.nMaxFile = MAX_PATH;
-	oFile.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
+	oFile.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST|OFN_HIDEREADONLY;
 	oFile.lpstrDefExt = (LPCWSTR)L"txt";
 
 	BOOL succFunc = GetSaveFileNameW(&oFile);
@@ -694,16 +776,33 @@ BOOL CCollectDlg::SaveLog(HWND hwnd)
 	// UTF-8 설정(WCHAR 출력)
 	unsigned short mark = 0xFEFF;
 	WriteFile(fileHandle, &mark, sizeof(mark), &returnLen, NULL);
-
+	std::wstring header = L"index,pName,pID,tID,msgContent,msgCode,msgType,wParam,lParam,caption,className,style,detail\n";
+	WriteFile(fileHandle, header.data(), header.size() * sizeof(WCHAR), &returnLen, NULL);
+	
+	ULONGLONG count = saveDataList.size();
 	for (UINT i = 0; i < count; i++)
 	{
-		textLen = SendMessageW(ListBoxHwnd, LB_GETTEXTLEN, (WPARAM)(i), (LPARAM)NULL);
-		curText = new WCHAR[textLen + 1];
-		SendMessageW(ListBoxHwnd, LB_GETTEXT, (WPARAM)(i), (LPARAM)curText);
-		curText[textLen] = L'\n';
+		//textLen = SendMessageW(ListBoxHwnd, LB_GETTEXTLEN, (WPARAM)(i), (LPARAM)NULL);
+		//curText = new WCHAR[textLen + 1];
+		//SendMessageW(ListBoxHwnd, LB_GETTEXT, (WPARAM)(i), (LPARAM)curText);
+		//curText[textLen] = L'\n';
+		std::wstring outputTxt = L"";
+		outputTxt += saveDataList[i].index + L",";
+		outputTxt += saveDataList[i].pName + L",";
+		outputTxt += saveDataList[i].pID + L",";
+		outputTxt += saveDataList[i].tID + L",";
+		outputTxt += saveDataList[i].msgContent + L",";
+		outputTxt += saveDataList[i].msgCode + L",";
+		outputTxt += saveDataList[i].msgType + L",";
+		outputTxt += saveDataList[i].wParam + L",";
+		outputTxt += saveDataList[i].lParam + L",";
+		outputTxt += saveDataList[i].caption + L",";
+		outputTxt += saveDataList[i].className + L",";
+		outputTxt += saveDataList[i].style + L",";
+		outputTxt += saveDataList[i].detail + L"\n";
 
 		// 파일 쓰기		
-		WriteFile(fileHandle, curText, (textLen + 1) * sizeof(WCHAR), &returnLen, NULL);
+		WriteFile(fileHandle, outputTxt.data(), outputTxt.size() * sizeof(WCHAR), &returnLen, NULL);
 
 		delete[] curText;
 		returnLen = 0;
