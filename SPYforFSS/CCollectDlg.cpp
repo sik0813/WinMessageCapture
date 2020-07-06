@@ -66,7 +66,7 @@ BOOL CCollectDlg::End()
 	DestroyWindow(m_collectListHwnd);
 	DestroyWindow(m_ownHwnd);
 
-	
+
 	WaitForSingleObject(m_threadHandle, INFINITE);
 	CloseHandle(m_threadHandle);
 	m_threadHandle = INVALID_HANDLE_VALUE;
@@ -105,7 +105,7 @@ INT_PTR CALLBACK CCollectDlg::RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARA
 			if (FALSE == pointerThis->m_showMsgData)
 			{
 				PostMessageW(hwnd, WM_COMMAND, MAKEWPARAM(IDC_STARTSUSPEND, IDC_STARTSUSPEND), NULL);
-			}			
+			}
 
 			// wParam, lParam Show/noShow
 			if (TRUE == pointerThis->m_curSettingData.wParamShow)
@@ -145,22 +145,20 @@ INT_PTR CALLBACK CCollectDlg::RunProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARA
 // 다이얼로그 초기화
 BOOL CCollectDlg::InitDialog(HWND hwnd, HWND hwndFocus, LPARAM lParam)
 {
-	m_startAndSuspend = GetDlgItem(hwnd, IDC_STARTSUSPEND);
-
 	InitCommonControls(); // Force the common controls DLL to be loaded.
 
 	// window is a handle to my window that is already created.
 	m_collectListHwnd = CreateWindowExW(
 		0, (LPWSTR)WC_LISTVIEWW, NULL,
 		WS_VISIBLE | WS_CHILD | WS_BORDER | LVS_SHOWSELALWAYS | LVS_REPORT,
-		11, 68, 776, 452,
+		11, 38, 776, 255,
 		hwnd, NULL, NULL, NULL);
 
 	memset(&m_lvCol, 0, sizeof(LVCOLUMNW));
 	m_lvCol.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
 	m_lvCol.iSubItem = 0;
 	m_lvCol.fmt = LVCFMT_LEFT;
-	
+
 	m_lvCol.cx = 70;
 	m_lvCol.pszText = L"Index";
 	ListView_InsertColumn(m_collectListHwnd, (int)colIndex::index, &m_lvCol);
@@ -237,11 +235,11 @@ void CCollectDlg::Command(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
 	case IDC_STARTSUSPEND:
 		if (FALSE == m_showMsgData)
 		{
-			SendMessageW(m_startAndSuspend, WM_SETTEXT, 0, (LPARAM)L"일시정지");
+			SendMessageW(GetDlgItem(hwnd, IDC_STARTSUSPEND), WM_SETTEXT, 0, (LPARAM)L"일시정지");
 		}
 		else
 		{
-			SendMessageW(m_startAndSuspend, WM_SETTEXT, 0, (LPARAM)L"시작");
+			SendMessageW(GetDlgItem(hwnd, IDC_STARTSUSPEND), WM_SETTEXT, 0, (LPARAM)L"시작");
 		}
 		m_showMsgData = !m_showMsgData;
 		break;
@@ -267,7 +265,10 @@ void CCollectDlg::InsertData(MsgData _inputMsgData)
 	if (FALSE == m_threadQuit)
 	{
 		EnterCriticalSection(&m_readWriteCS);
-		m_inputMsg.push(_inputMsgData);
+		if (TRUE == m_showMsgData)
+		{
+			m_inputMsg.push(_inputMsgData);
+		}
 		LeaveCriticalSection(&m_readWriteCS);
 		SetEvent(m_queueNotEmpty);
 	}
@@ -283,7 +284,7 @@ UINT CCollectDlg::DisplayDataThread(void * arg)
 void CCollectDlg::DisplayData()
 {
 	std::queue<MsgData> inputMsgQeuue;
-	saveDataList.reserve(1024);
+	m_saveDataList.reserve(1024);
 	while (true)
 	{
 		HWND listHwnd = GetDlgItem(m_ownHwnd, IDC_COLLECTLIST);
@@ -313,17 +314,20 @@ void CCollectDlg::DisplayData()
 			MsgData inputMsgData = inputMsgQeuue.front();
 			inputMsgQeuue.pop();
 
+			if (65536 <= inputMsgData.msgCode)
+			{
+				continue;
+			}
+
 			if (false == m_curSettingData.msgOptions[inputMsgData.msgCode]
 				&& false == m_curSettingData.otherMsgShow)
 			{
 				continue;
 			}
 
-			if (FALSE == m_showMsgData || TRUE == m_threadQuit)
+			if (TRUE == m_threadQuit)
 			{
-				std::queue<MsgData> clearQueue;
-				std::swap(clearQueue, inputMsgQeuue);
-				continue;
+				break;
 			}
 
 			WCHAR buf[32] = { 0, };
@@ -373,7 +377,7 @@ void CCollectDlg::DisplayData()
 				curSaveData.msgType = L"P";
 				break;
 			}
-			
+
 			// wParam 추가
 			memset(buf, 0, 32);
 			wsprintf(buf, L"0x%016X", inputMsgData.wParam);
@@ -396,21 +400,21 @@ void CCollectDlg::DisplayData()
 			case WM_MOVE:
 			case WM_DESTROY:
 				WCHAR longBuf[MAX_PATH] = { 0, };
-				GetWindowTextW(inputMsgData.hwnd, longBuf, MAX_PATH);
+				GetWindowTextW((HWND)inputMsgData.hwnd, longBuf, MAX_PATH);
 				if (longBuf[0] != '\0')
 				{
 					curSaveData.caption += std::wstring(longBuf);
 				}
 
 				memset(longBuf, 0, MAX_PATH);
-				GetClassNameW(inputMsgData.hwnd, longBuf, MAX_PATH);
+				GetClassNameW((HWND)inputMsgData.hwnd, longBuf, MAX_PATH);
 				if (longBuf[0] != '\0')
 				{
 					curSaveData.className += std::wstring(longBuf);
 				}
 
 				WNDCLASSW wndClass;
-				GetClassInfoW(inputMsgData.hInstance, longBuf, &wndClass);
+				GetClassInfoW((HINSTANCE)inputMsgData.hInstance, longBuf, &wndClass);
 
 				AddStyleString(&curSaveData.style, wndClass.style);
 				break;
@@ -422,27 +426,27 @@ void CCollectDlg::DisplayData()
 			{
 			case WM_CREATE:
 			case WM_WINDOWPOSCHANGED:
-				curSaveData.detail += L" " + std::wstring(inputMsgData.otherData);
+				curSaveData.detail += std::wstring(inputMsgData.otherData);
 				break;
 
 			case WM_SETTEXT:
-				curSaveData.detail += L" Text:" + std::wstring(inputMsgData.otherData);
+				curSaveData.detail += L"Text:" + std::wstring(inputMsgData.otherData);
 				break;
 
 			case WM_STYLECHANGED:
 				optionData = std::wstring(inputMsgData.otherData);
 				front = optionData.find(L':');
-				curSaveData.detail += L" Old";
+				curSaveData.detail += L"Old";
 				AddStyleString(&curSaveData.detail, std::stoi(optionData.substr(front + 1)), 2);
 
-				curSaveData.detail += L" New";
+				curSaveData.detail += L"  New";
 				front = optionData.find_last_of(L':');
 				AddStyleString(&curSaveData.detail, std::stoi(optionData.substr(front + 1)), 2);
 				break;
 
 			case WM_SHOWWINDOW:
-				curSaveData.detail += L" WindowShow:";
-				curSaveData.detail += inputMsgData.wParam?L"TRUE":L"FALSE";
+				curSaveData.detail += L"WindowShow:";
+				curSaveData.detail += inputMsgData.wParam ? L"TRUE" : L"FALSE";
 
 				switch (inputMsgData.lParam)
 				{
@@ -510,7 +514,7 @@ void CCollectDlg::DisplayData()
 			}
 
 			m_lvItem.iItem = m_listRowIndex++;     // choose item
-			
+
 			m_lvItem.iSubItem = (int)colIndex::index;
 			m_lvItem.pszText = &curSaveData.index[0];
 			ListView_InsertItem(m_collectListHwnd, (LPARAM)&m_lvItem);
@@ -563,12 +567,10 @@ void CCollectDlg::DisplayData()
 			m_lvItem.pszText = &curSaveData.detail[0];
 			ListView_SetItem(m_collectListHwnd, (LPARAM)&m_lvItem);
 
-			saveDataList.push_back(curSaveData);
-			//SendMessageW(listHwnd, LB_INSERTSTRING, (WPARAM)-1, (LPARAM)viewMsg.data());
-			//LRESULT count = SendMessageW(listHwnd, LB_GETCOUNT, 0, 0);
-			//SendMessageW(listHwnd, LB_SETTOPINDEX, (WPARAM)count - 1, (LPARAM)0);
-		}
+			ListView_Scroll(m_collectListHwnd, 0, m_listRowIndex - 1);
 
+			m_saveDataList.push_back(curSaveData);
+		}
 	}
 }
 
@@ -709,7 +711,7 @@ void CCollectDlg::AddStyleString(std::wstring *_inputString, UINT _inputStyle, i
 	if (WS_VSCROLL & _inputStyle)
 	{
 		styleString += L"WS_VSCROLL";
-	}	
+	}
 
 	if (!styleString.empty())
 	{
@@ -746,7 +748,7 @@ BOOL CCollectDlg::SaveLog(HWND hwnd)
 	oFile.lpstrFilter = L"Text Files (*.txt)\0*.txt\0All Files (*.*)\0*.*\0";
 	oFile.lpstrFile = saveFileName;
 	oFile.nMaxFile = MAX_PATH;
-	oFile.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST|OFN_HIDEREADONLY;
+	oFile.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
 	oFile.lpstrDefExt = (LPCWSTR)L"txt";
 
 	BOOL succFunc = GetSaveFileNameW(&oFile);
@@ -773,33 +775,31 @@ BOOL CCollectDlg::SaveLog(HWND hwnd)
 	LRESULT textLen = 0;
 	LPWSTR curText = NULL;
 
-	// UTF-8 설정(WCHAR 출력)
-	unsigned short mark = 0xFEFF;
-	WriteFile(fileHandle, &mark, sizeof(mark), &returnLen, NULL);
+	// UNICODE(Little Endian) 설정(WCHAR 출력)
+	unsigned char mark[2] = { 0xFF, 0xFE };
+	// UTF-8
+	//unsigned char mark[3] = { 0xEF, 0xBB, 0xBF };
+	WriteFile(fileHandle, &mark, 2, &returnLen, NULL);
 	std::wstring header = L"index,pName,pID,tID,msgContent,msgCode,msgType,wParam,lParam,caption,className,style,detail\n";
 	WriteFile(fileHandle, header.data(), header.size() * sizeof(WCHAR), &returnLen, NULL);
-	
-	ULONGLONG count = saveDataList.size();
+
+	ULONGLONG count = m_saveDataList.size();
 	for (UINT i = 0; i < count; i++)
 	{
-		//textLen = SendMessageW(ListBoxHwnd, LB_GETTEXTLEN, (WPARAM)(i), (LPARAM)NULL);
-		//curText = new WCHAR[textLen + 1];
-		//SendMessageW(ListBoxHwnd, LB_GETTEXT, (WPARAM)(i), (LPARAM)curText);
-		//curText[textLen] = L'\n';
 		std::wstring outputTxt = L"";
-		outputTxt += saveDataList[i].index + L",";
-		outputTxt += saveDataList[i].pName + L",";
-		outputTxt += saveDataList[i].pID + L",";
-		outputTxt += saveDataList[i].tID + L",";
-		outputTxt += saveDataList[i].msgContent + L",";
-		outputTxt += saveDataList[i].msgCode + L",";
-		outputTxt += saveDataList[i].msgType + L",";
-		outputTxt += saveDataList[i].wParam + L",";
-		outputTxt += saveDataList[i].lParam + L",";
-		outputTxt += saveDataList[i].caption + L",";
-		outputTxt += saveDataList[i].className + L",";
-		outputTxt += saveDataList[i].style + L",";
-		outputTxt += saveDataList[i].detail + L"\n";
+		outputTxt += m_saveDataList[i].index + L",";
+		outputTxt += m_saveDataList[i].pName + L",";
+		outputTxt += m_saveDataList[i].pID + L",";
+		outputTxt += m_saveDataList[i].tID + L",";
+		outputTxt += m_saveDataList[i].msgContent + L",";
+		outputTxt += m_saveDataList[i].msgCode + L",";
+		outputTxt += m_saveDataList[i].msgType + L",";
+		outputTxt += m_saveDataList[i].wParam + L",";
+		outputTxt += m_saveDataList[i].lParam + L",";
+		outputTxt += m_saveDataList[i].caption + L",";
+		outputTxt += m_saveDataList[i].className + L",";
+		outputTxt += m_saveDataList[i].style + L",";
+		outputTxt += m_saveDataList[i].detail + L"\n";
 
 		// 파일 쓰기		
 		WriteFile(fileHandle, outputTxt.data(), outputTxt.size() * sizeof(WCHAR), &returnLen, NULL);

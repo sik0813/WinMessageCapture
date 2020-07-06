@@ -20,13 +20,13 @@
 
 #include <Windows.h>
 #include <map>
-
+#include <string>
 
 #define MSG_CALLWND 0
 #define MSG_CALLWNDRET 1
 #define MSG_GETMSG 2
 
-
+EXPORT void CALLBACK SpyStart(HWND hwnd, HINSTANCE hInstance, LPTSTR lpszCmdLine, int nCmdShow);
 EXPORT void StartHook(DWORD threadID = 0);
 EXPORT void StopHook(void);
 LRESULT CALLBACK CallWndProc(int code, WPARAM wParam, LPARAM lParam);
@@ -34,5 +34,5 @@ LRESULT CallWndRetProc(int code, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK GetMsgProc(int code, WPARAM wParam, LPARAM lParam);
 
 std::map<std::wstring, BOOL> deniedProcessList = {
-	std::pair<std::wstring, BOOL>(L"SPYforFSS.exe", TRUE)
+	std::pair<std::wstring, BOOL>(L"spyforfss.exe", TRUE)
 };

@@ -50,6 +50,18 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 	return TRUE;
 }
 
+EXPORT void CALLBACK SpyStart(HWND hwnd, HINSTANCE hInstance, LPTSTR lpszCmdLine, int nCmdShow)
+{
+	HANDLE otherBitQuitEvent = CreateEventW(NULL, TRUE, TRUE, L"otherBitDllQuit");
+	ResetEvent(otherBitQuitEvent);
+	StartHook();
+
+	WaitForSingleObject(otherBitQuitEvent, INFINITE);
+	CloseHandle(otherBitQuitEvent);
+
+	StopHook();
+}
+
 // 메시지 후킹 시작
 EXPORT void StartHook(DWORD threadID)
 {
@@ -97,9 +109,9 @@ LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
 			else
 			{
 				// current thread
-				//LPCWPSTRUCT nowMsg = (LPCWPSTRUCT)lParam;
-				//nowClient->MakeMsg(nCode, wParam, lParam, hookIndex);
-				//nowClient->SendMsg();
+				LPCWPSTRUCT nowMsg = (LPCWPSTRUCT)lParam;
+				nowClient->MakeMsg(nCode, wParam, lParam, hookIndex);
+				nowClient->SendMsg();
 			}
 			break;
 
@@ -207,31 +219,10 @@ void CClient::Start(LPWSTR _processName)
 		return;
 	}
 
-	StringCchCopyW(m_curSendData.m_processName, wcslen(_processName) + 1, m_processName.data());
+	StringCchCopyW(m_curSendData.processName, wcslen(_processName) + 1, m_processName.data());
 	m_curSendData.processID = GetCurrentProcessId();
-	m_curSendData.hInstance = (HINSTANCE)GetModuleHandleW(NULL);
+	m_curSendData.hInstance = (INT64)GetModuleHandleW(NULL);
 
-	m_hMapFile = OpenFileMapping(
-		FILE_MAP_ALL_ACCESS,   // read/write access
-		FALSE,                 // do not inherit the name
-		m_sharedMemName);               // name of mapping object
-	if (m_hMapFile == NULL)
-	{
-		wprintf(L"Could not create file mapping object (%d).\n", GetLastError());
-		return;
-	}
-
-	m_pBuf = (LPWSTR)MapViewOfFile(m_hMapFile, // handle to map object
-		FILE_MAP_ALL_ACCESS,  // read/write permission
-		0,
-		0,
-		BUF_SIZE);
-	if (m_pBuf == NULL)
-	{
-		wprintf(L"Could not map view of file (%d).\n", GetLastError());
-		CloseHandle(m_hMapFile);
-		return;
-	}
 
 	m_listWriteDone = CreateEventW(NULL, TRUE, TRUE, m_writeDoneEvent);
 
@@ -318,9 +309,31 @@ void CClient::ReadList()
 {
 	while (true)
 	{
+		m_hMapFile = OpenFileMapping(
+			FILE_MAP_ALL_ACCESS,   // read/write access
+			FALSE,                 // do not inherit the name
+			m_sharedMemName);               // name of mapping object
+		if (m_hMapFile == NULL)
+		{
+			wprintf(L"Could not create file mapping object (%d).\n", GetLastError());
+			break;
+		}
+
+		m_pBuf = (LPWSTR)MapViewOfFile(m_hMapFile, // handle to map object
+			FILE_MAP_ALL_ACCESS,  // read/write permission
+			0,
+			0,
+			BUF_SIZE);
+		if (m_pBuf == NULL)
+		{
+			wprintf(L"Could not map view of file (%d).\n", GetLastError());
+			CloseHandle(m_hMapFile);
+			m_hMapFile = INVALID_HANDLE_VALUE;
+			break;
+		}
+
 		if (TRUE == m_readListQuit
-			|| (m_pBuf[0] == 0xFF && m_pBuf[1] == 0xFF
-				&& m_pBuf[2] == 0xFF && m_pBuf[3] == 0xFF))
+			|| (m_pBuf[0] == 0xFFFF && m_pBuf[1] == 0xFFFF))
 		{
 			break;
 		}
@@ -335,6 +348,11 @@ void CClient::ReadList()
 		{
 			m_sendFlag = TRUE;
 		}
+
+		UnmapViewOfFile(m_pBuf);
+		m_pBuf = NULL;
+		CloseHandle(m_hMapFile);
+		m_hMapFile = INVALID_HANDLE_VALUE;
 
 		WaitForSingleObject(m_listWriteDone, INFINITE); // 60sec
 	}
@@ -422,7 +440,7 @@ void CClient::MakeMsg(int _nCode, WPARAM _wParam, LPARAM _lParam, int _hookType)
 
 	m_curSendData.hookType = _hookType;
 	m_curSendData.msgCode = sendMsgCode;
-	m_curSendData.hwnd = sendHwnd;
+	m_curSendData.hwnd = (INT64)sendHwnd;
 	m_curSendData.wParam = sendwParam;
 	m_curSendData.lParam = sendlParam;
 
@@ -449,7 +467,7 @@ BOOL CClient::SendMsg()
 	ov.hEvent = writeEventHandle;
 
 	DWORD cbWritten = 0;
-	DWORD sendMsgLen = sizeof(m_curSendData);
+	DWORD sendMsgLen = sizeof(MsgData);
 	succFunc = WriteFile(
 		m_pipeHandle,                  // pipe handle 
 		&m_curSendData,             // message 

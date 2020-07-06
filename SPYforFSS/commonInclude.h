@@ -25,11 +25,11 @@ typedef struct _MsgData
 	DWORD processID;
 	DWORD threadID;
 	int hookType;
-	HWND hwnd;
+	INT64 hwnd;
 	DWORD msgCode;
-	WPARAM wParam;
-	LPARAM lParam;
-	HINSTANCE hInstance;
+	UINT64 wParam;
+	UINT64 lParam;
+	INT64 hInstance;
 	WCHAR otherData[MAX_PATH];
 	_MsgData()
 	{

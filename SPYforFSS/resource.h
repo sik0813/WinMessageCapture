@@ -6,6 +6,7 @@
 #define IDD_COLLECTPAGE                 104
 #define IDD_OPTIONPAGE                  105
 #define IDB_REFRESH                     105
+#define IDD_DIALOG1                     106
 #define IDC_PIDLIST                     1001
 #define IDC_SELECTS                     1002
 #define IDC_REFRESH                     1003
@@ -29,9 +30,9 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        106
+#define _APS_NEXT_RESOURCE_VALUE        108
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1017
+#define _APS_NEXT_CONTROL_VALUE         1022
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

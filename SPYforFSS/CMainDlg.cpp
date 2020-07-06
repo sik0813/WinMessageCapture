@@ -248,6 +248,7 @@ BOOL CMainDlg::Show()
 
 BOOL CMainDlg::End()
 {
+	memset(m_pBuf, 0, BUF_SIZE);
 	WCHAR endMsg[4];
 	memset(endMsg, 0xF, 8);
 	memcpy(m_pBuf, endMsg, 8);

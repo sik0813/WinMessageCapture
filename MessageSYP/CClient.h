@@ -7,19 +7,19 @@
 
 typedef struct _MsgData
 {
-	WCHAR m_processName[MAX_PATH];
+	WCHAR processName[MAX_PATH];
 	DWORD processID;
 	DWORD threadID;
 	int hookType;
-	HWND hwnd;
+	INT64 hwnd;
 	DWORD msgCode;
-	WPARAM wParam;
-	LPARAM lParam;
-	HINSTANCE hInstance;
+	UINT64 wParam;
+	UINT64 lParam;
+	INT64 hInstance;
 	WCHAR otherData[MAX_PATH];
 	_MsgData()
 	{
-		memset(&m_processName, 0, MAX_PATH);
+		memset(&processName, 0, MAX_PATH);
 		processID = 0;
 		threadID = 0;
 		hookType = 0;

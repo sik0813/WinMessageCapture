@@ -57,7 +57,6 @@ private:
 
 	HWND m_ownHwnd = NULL;
 	BOOL m_showMsgData = FALSE; // 시작(TRUE)/일시정지(FALSE)
-	HWND m_startAndSuspend;
 
 	HANDLE m_queueNotEmpty = NULL;
 	std::queue<MsgData> m_inputMsg;
@@ -69,7 +68,7 @@ private:
 	LVCOLUMNW m_lvCol;
 	LVITEMW m_lvItem;
 	ULONGLONG m_listRowIndex = 0;
-	std::vector<SaveData> saveDataList;
+	std::vector<SaveData> m_saveDataList;
 
 	HWND m_optionHwnd = NULL;
 
