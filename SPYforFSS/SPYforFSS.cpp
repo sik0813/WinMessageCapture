@@ -16,7 +16,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 	GetModuleFileName(NULL, programPath, _MAX_PATH);
 	std::wstring paramString = L"\"" + std::wstring(programPath);
 	paramString = paramString.substr(0, paramString.find_last_of(L'\\') + 1);
-	paramString += L"MessageSYP_amd64.dll\" SpyStart";
+	paramString += L"MessageSPY_amd64.dll\" SpyStart";
 
 	SHELLEXECUTEINFO seInfo;
 	memset(&seInfo, 0, sizeof(SHELLEXECUTEINFO));
