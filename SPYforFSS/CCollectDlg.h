@@ -94,4 +94,6 @@ public:
 
 	// 현재 ListBox 데이터 파일로 저장
 	BOOL SaveLog(HWND hwnd);
+
+	std::string wcs2mbs(std::wstring const& str, std::locale const& loc = std::locale());
 };

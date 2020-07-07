@@ -6,7 +6,6 @@
 #define IDD_COLLECTPAGE                 104
 #define IDD_OPTIONPAGE                  105
 #define IDB_REFRESH                     105
-#define IDD_DIALOG1                     106
 #define IDC_PIDLIST                     1001
 #define IDC_SELECTS                     1002
 #define IDC_REFRESH                     1003

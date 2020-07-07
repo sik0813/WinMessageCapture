@@ -776,33 +776,35 @@ BOOL CCollectDlg::SaveLog(HWND hwnd)
 	LPWSTR curText = NULL;
 
 	// UNICODE(Little Endian) 설정(WCHAR 출력)
-	unsigned char mark[2] = { 0xFF, 0xFE };
+	//unsigned char mark[2] = { 0xFF, 0xFE };
 	// UTF-8
 	//unsigned char mark[3] = { 0xEF, 0xBB, 0xBF };
-	WriteFile(fileHandle, &mark, 2, &returnLen, NULL);
-	std::wstring header = L"index,pName,pID,tID,msgContent,msgCode,msgType,wParam,lParam,caption,className,style,detail\n";
-	WriteFile(fileHandle, header.data(), header.size() * sizeof(WCHAR), &returnLen, NULL);
+	//WriteFile(fileHandle, &mark, 2, &returnLen, NULL);
+	std::string header = "index,pName,pID,tID,msgContent,msgCode,msgType,wParam,lParam,caption,className,style,detail\n";
+	WriteFile(fileHandle, header.data(), header.size(), &returnLen, NULL);
 
 	ULONGLONG count = m_saveDataList.size();
 	for (UINT i = 0; i < count; i++)
 	{
-		std::wstring outputTxt = L"";
-		outputTxt += m_saveDataList[i].index + L",";
-		outputTxt += m_saveDataList[i].pName + L",";
-		outputTxt += m_saveDataList[i].pID + L",";
-		outputTxt += m_saveDataList[i].tID + L",";
-		outputTxt += m_saveDataList[i].msgContent + L",";
-		outputTxt += m_saveDataList[i].msgCode + L",";
-		outputTxt += m_saveDataList[i].msgType + L",";
-		outputTxt += m_saveDataList[i].wParam + L",";
-		outputTxt += m_saveDataList[i].lParam + L",";
-		outputTxt += m_saveDataList[i].caption + L",";
-		outputTxt += m_saveDataList[i].className + L",";
-		outputTxt += m_saveDataList[i].style + L",";
-		outputTxt += m_saveDataList[i].detail + L"\n";
+		std::string ouputTxtA = "";
+		std::wstring outputTxtW = L"";
+		outputTxtW += m_saveDataList[i].index + L",";
+		outputTxtW += m_saveDataList[i].pName + L",";
+		outputTxtW += m_saveDataList[i].pID + L",";
+		outputTxtW += m_saveDataList[i].tID + L",";
+		outputTxtW += m_saveDataList[i].msgContent + L",";
+		outputTxtW += m_saveDataList[i].msgCode + L",";
+		outputTxtW += m_saveDataList[i].msgType + L",";
+		outputTxtW += m_saveDataList[i].wParam + L",";
+		outputTxtW += m_saveDataList[i].lParam + L",";
+		outputTxtW += m_saveDataList[i].caption + L",";
+		outputTxtW += m_saveDataList[i].className + L",";
+		outputTxtW += m_saveDataList[i].style + L",";
+		outputTxtW += m_saveDataList[i].detail + L"\n";
 
-		// 파일 쓰기		
-		WriteFile(fileHandle, outputTxt.data(), outputTxt.size() * sizeof(WCHAR), &returnLen, NULL);
+		ouputTxtA = wcs2mbs(outputTxtW, std::locale("kor"));
+		// 파일 쓰기
+		WriteFile(fileHandle, ouputTxtA.data(), ouputTxtA.size(), &returnLen, NULL);
 
 		delete[] curText;
 		returnLen = 0;
@@ -814,4 +816,16 @@ BOOL CCollectDlg::SaveLog(HWND hwnd)
 	MessageBoxW(NULL, L"저장 완료", L"Success", MB_OK);
 
 	return TRUE;
+}
+
+std::string CCollectDlg::wcs2mbs(std::wstring const & str, std::locale const & loc)
+{
+	typedef std::codecvt <wchar_t, char, std::mbstate_t> codecvt_t;
+	std::codecvt <wchar_t, char, std::mbstate_t> const& codecvt = std::use_facet<codecvt_t>(loc);
+	std::mbstate_t state = std::mbstate_t();
+	std::vector<char> buf((str.size() + 1) * codecvt.max_length());
+	wchar_t const* in_next = str.c_str();
+	char* out_next = &buf[0];
+	codecvt_t::result r = codecvt.out(state, str.c_str(), str.c_str() + str.size(), in_next, &buf[0], &buf[0] + buf.size(), out_next);
+	return std::string(&buf[0]);
 }
