@@ -22,6 +22,7 @@
     <ProjectGuid>{45F40083-7ECC-407F-A530-0977379577C8}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>MessageSYP</RootNamespace>
+    <ProjectName>MessageSPY</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -170,7 +171,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="CClient.h" />
-    <ClInclude Include="MessageSYP.h" />
+    <ClInclude Include="MessageSPY.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>
@@ -189,7 +190,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
       </PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="MessageSYP.cpp" />
+    <ClCompile Include="MessageSPY.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>

@@ -21,10 +21,10 @@
     <ClInclude Include="targetver.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="MessageSYP.h">
+    <ClInclude Include="CClient.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="CClient.h">
+    <ClInclude Include="MessageSPY.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
@@ -32,10 +32,10 @@
     <ClCompile Include="stdafx.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="MessageSYP.cpp">
+    <ClCompile Include="dllmain.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="dllmain.cpp">
+    <ClCompile Include="MessageSPY.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
