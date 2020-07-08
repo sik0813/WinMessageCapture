@@ -269,8 +269,8 @@ void CCollectDlg::InsertData(MsgData _inputMsgData)
 		{
 			m_inputMsg.push(_inputMsgData);
 		}
-		LeaveCriticalSection(&m_readWriteCS);
 		SetEvent(m_queueNotEmpty);
+		LeaveCriticalSection(&m_readWriteCS);
 	}
 }
 
