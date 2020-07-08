@@ -745,7 +745,7 @@ BOOL CCollectDlg::SaveLog(HWND hwnd)
 
 	oFile.lStructSize = sizeof(oFile);
 	oFile.hwndOwner = NULL;
-	oFile.lpstrFilter = L"Text Files (*.txt)\0*.txt\0CSV Files (*.cvs)\0*.csv\0All Files (*.*)\0*.*\0";
+	oFile.lpstrFilter = L"Text Files (*.txt)\0*.txt\0CSV Files (*.csv)\0*.csv\0All Files (*.*)\0*.*\0";
 	oFile.lpstrFile = saveFileName;
 	oFile.nMaxFile = MAX_PATH;
 	oFile.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT;
