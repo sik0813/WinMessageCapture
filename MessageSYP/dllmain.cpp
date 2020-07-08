@@ -12,10 +12,8 @@
 
 HINSTANCE kdllInstance = NULL;
 static HHOOK hookList[NUMHOOK];
-
 CClient *nowClient = NULL;
 
-LPCWSTR deniedProcessName = L"SPYforFSS.exe";
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
 {
