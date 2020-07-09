@@ -188,6 +188,10 @@ BOOL CCollectDlg::InitDialog(HWND hwnd, HWND hwndFocus, LPARAM lParam)
 	ListView_InsertColumn(m_collectListHwnd, (int)colIndex::msgType, &m_lvCol);
 
 	m_lvCol.cx = 70;
+	m_lvCol.pszText = L"HWND";
+	ListView_InsertColumn(m_collectListHwnd, (int)colIndex::hwnd, &m_lvCol);
+
+	m_lvCol.cx = 70;
 	m_lvCol.pszText = L"wParam";
 	ListView_InsertColumn(m_collectListHwnd, (int)colIndex::wParam, &m_lvCol);
 
@@ -380,6 +384,11 @@ void CCollectDlg::DisplayData()
 
 			// wParam 추가
 			memset(buf, 0, 32);
+			wsprintf(buf, L"0x%016X", inputMsgData.hwnd);
+			curSaveData.hwnd = std::wstring(buf);
+
+			// wParam 추가
+			memset(buf, 0, 32);
 			wsprintf(buf, L"0x%016X", inputMsgData.wParam);
 			curSaveData.wParam = std::wstring(buf);
 
@@ -541,6 +550,10 @@ void CCollectDlg::DisplayData()
 
 			m_lvItem.iSubItem = (int)colIndex::msgType;
 			m_lvItem.pszText = &curSaveData.msgType[0];
+			ListView_SetItem(m_collectListHwnd, (LPARAM)&m_lvItem);
+
+			m_lvItem.iSubItem = (int)colIndex::hwnd;
+			m_lvItem.pszText = &curSaveData.hwnd[0];
 			ListView_SetItem(m_collectListHwnd, (LPARAM)&m_lvItem);
 
 			m_lvItem.iSubItem = (int)colIndex::wParam;

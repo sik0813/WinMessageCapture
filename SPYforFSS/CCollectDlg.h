@@ -7,7 +7,7 @@
 #pragma comment( lib, "comctl32" )  
 
 enum class colIndex {
-	index, pName, pID, tID, msgContent, msgCode, msgType,
+	index, pName, pID, tID, msgContent, msgCode, msgType, hwnd,
 	wParam, lParam, caption, className, style, detail
 };
 
@@ -20,6 +20,7 @@ typedef struct _SaveData
 	std::wstring msgCode;
 	std::wstring msgContent;
 	std::wstring msgType;
+	std::wstring hwnd;
 	std::wstring wParam;
 	std::wstring lParam;
 	std::wstring caption;
